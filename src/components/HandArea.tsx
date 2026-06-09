@@ -27,8 +27,9 @@ export function HandArea(props: {
             <strong>{card.name}</strong>
             <span>
               {card.sector} · R{card.rank}
+              {card.cardType ? ` · ${card.cardType}` : ''}
             </span>
-            <p>{describeCard(card.id)}</p>
+            <p>{card.playEffect ?? describeCard(card.id)}</p>
           </button>
         ))}
       </div>

@@ -47,6 +47,10 @@ export function getComboMultiplier(comboCount: number) {
   return roundToTwoDecimals(1 + comboCount * 0.08);
 }
 
+export function getTurboturnMultiplier(turboturnStep: number) {
+  return roundToTwoDecimals(1 + turboturnStep * 0.15);
+}
+
 function roundToTwoDecimals(value: number) {
   return Math.round(value * 100) / 100;
 }

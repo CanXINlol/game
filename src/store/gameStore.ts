@@ -11,7 +11,7 @@ import {
   startNextMarketPressure
 } from '../game/rewards';
 import {
-  createTestEventGameState,
+  createFormalEventGameState,
   playCard as playEventCard,
   type EventGameState,
   type EventGamePhase
@@ -37,6 +37,7 @@ function cloneEventState(state: EventGameState): EventGameState {
     ...state,
     hand: [...state.hand],
     drawPile: [...state.drawPile],
+    discardPile: [...state.discardPile],
     playedCardsThisTurn: [...state.playedCardsThisTurn],
     combo: {
       ...state.combo,
@@ -62,7 +63,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   gameStatus: 'start',
   eventState: null,
   startNewRun: () => {
-    const eventState = createTestEventGameState();
+    const eventState = createFormalEventGameState();
 
     set({
       lockedProfit: 0,

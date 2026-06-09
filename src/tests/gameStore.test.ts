@@ -13,8 +13,8 @@ describe('event-driven game store', () => {
 
     expect(state.gameStatus).toBe('playing');
     expect(state.eventState?.hand).toHaveLength(8);
-    expect(state.eventState?.drawPile).toHaveLength(2);
-    expect(state.eventState?.tools).toHaveLength(8);
+    expect(state.eventState?.drawPile).toHaveLength(22);
+    expect(state.eventState?.tools).toHaveLength(20);
   });
 
   it('plays a card and updates hand, played cards, event log, combo, and MarketPressure', () => {
@@ -25,7 +25,7 @@ describe('event-driven game store', () => {
       throw new Error('Expected event state.');
     }
 
-    useGameStore.getState().playCard('test-card-tech-buy');
+    useGameStore.getState().playCard('formal-tech-001');
 
     const after = useGameStore.getState().eventState;
 
@@ -35,7 +35,7 @@ describe('event-driven game store', () => {
 
     expect(after.hand).toHaveLength(before.hand.length - 1);
     expect(after.playedCardsThisTurn.map((card) => card.id)).toContain(
-      'test-card-tech-buy'
+      'formal-tech-001'
     );
     expect(after.combo.eventLog.length).toBeGreaterThan(0);
     expect(after.combo.comboCount).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ describe('event-driven game store', () => {
         }
       }
     });
-    useGameStore.getState().playCard('test-card-tech-buy');
+    useGameStore.getState().playCard('formal-tech-001');
 
     expect(useGameStore.getState().gameStatus).toBe('reward');
     expect(useGameStore.getState().eventState?.rewardChoices).toHaveLength(3);
@@ -87,7 +87,7 @@ describe('event-driven game store', () => {
         }
       }
     });
-    useGameStore.getState().playCard('test-card-tech-buy');
+    useGameStore.getState().playCard('formal-tech-001');
 
     const rewardId = useGameStore.getState().eventState?.rewardChoices[0]?.id;
 
@@ -114,10 +114,15 @@ describe('event-driven game store', () => {
     useGameStore.setState({
       eventState: {
         ...eventState,
-        maxRisk: 20
+        maxRisk: 18,
+        marketPressure: {
+          ...eventState.marketPressure,
+          hp: 999,
+          maxHp: 999
+        }
       }
     });
-    useGameStore.getState().playCard('test-card-margin-add');
+    useGameStore.getState().playCard('formal-tech-005');
 
     expect(useGameStore.getState().gameStatus).toBe('bankrupt');
   });

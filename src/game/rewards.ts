@@ -1,10 +1,12 @@
 import { getComboMultiplier } from './combo';
+import { discardContinuousTurn, drawFromContinuousDeck } from './deck';
 import {
   TEST_EVENT_CARDS,
   TEST_EVENT_TOOLS,
   type EventCard,
   type EventTool
 } from './effects';
+import { FORMAL_EVENT_CARDS, FORMAL_EVENT_TOOLS } from './formalContent';
 import { createMarketPressureByIndex, type MarketPressure } from './marketPressure';
 import type { EventGameState } from './playCard';
 import { createRng, type Rng } from './rng';
@@ -35,15 +37,21 @@ export interface RewardApplyResult {
 }
 
 const REWARD_OPTION_COUNT = 3;
+const EVENT_HAND_SIZE = 5;
 
 const REWARD_CARD_IDS = [
-  'test-card-hot-rotation',
-  'test-card-limit-chase',
-  'test-card-quant-copy',
-  'test-card-dip-rebound'
+  'formal-tech-003',
+  'formal-consumer-006',
+  'formal-medical-005',
+  'formal-finance-003'
 ] as const;
 
-const REWARD_TOOL_IDS = ['test-tool-quant-terminal', 'test-tool-limit-calculator'] as const;
+const REWARD_TOOL_IDS = [
+  'formal-tool-chive-notebook',
+  'formal-tool-limit-up-calculator',
+  'test-tool-quant-terminal',
+  'test-tool-limit-calculator'
+] as const;
 
 export function createRewardSeed(state: EventGameState) {
   return `${state.seed}-reward-${state.rewardsTakenCount}`;
@@ -88,6 +96,12 @@ export function applyRewardChoice(
 }
 
 export function startNextMarketPressure(state: EventGameState): EventGameState {
+  const preparedState = discardContinuousTurn(state);
+  state.hand = preparedState.hand;
+  state.discardPile = preparedState.discardPile;
+  state.playedCardsThisTurn = preparedState.playedCardsThisTurn;
+  state.cardsDrawnThisTurn = preparedState.cardsDrawnThisTurn;
+
   const nextIndex = state.marketPressureIndex + 1;
   const nextPressure = createMarketPressureByIndex(state.seed, nextIndex);
 
@@ -96,11 +110,17 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
   state.phase = 'playing';
   state.rewardChoices = [];
   state.ap = state.maxAp;
+  state.actionPoints = state.ap;
+  state.maxActionPoints = state.maxAp;
   state.playedCardsThisTurn = [];
   state.lastPlayedCard = null;
+  state.lastPlayedCost = null;
+  state.turboturnStep = 0;
+  state.turboturnMultiplier = 1;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
   state.triggeredComboMilestones = {};
+  drawOpeningHand(state);
 
   applyInitialComboBonus(state);
 
@@ -109,6 +129,17 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
   );
 
   return state;
+}
+
+function drawOpeningHand(state: EventGameState) {
+  const drawCount = Math.max(0, EVENT_HAND_SIZE - state.hand.length);
+  const nextState = drawFromContinuousDeck(state, drawCount);
+
+  state.hand = nextState.hand;
+  state.drawPile = nextState.drawPile;
+  state.discardPile = nextState.discardPile;
+  state.reshuffleCount = nextState.reshuffleCount;
+  state.cardsDrawnThisTurn = nextState.cardsDrawnThisTurn;
 }
 
 export function enterDayEndAfterReward(state: EventGameState): EventGameState {
@@ -152,11 +183,8 @@ function createAddCardReward(
   return {
     id: `reward-${rewardIndex}-add-card-${cardId}`,
     kind: 'ADD_CARD',
-    title: cardId === 'test-card-hot-rotation' ? '追加热点' : `新牌：${card.name}`,
-    description:
-      cardId === 'test-card-hot-rotation'
-        ? '获得 1 张热点轮动，触发 hotSector 并抽牌。'
-        : `将 ${card.name} 加入牌组，强化 combo 链路。`,
+    title: `新牌：${card.name}`,
+    description: `将 ${card.name} 加入牌组，强化事件 combo 链路。`,
     cardId,
     cardName: card.name
   };
@@ -403,7 +431,12 @@ function applyInitialComboBonus(state: EventGameState) {
 }
 
 function getDeckCards(state: EventGameState) {
-  return [...state.hand, ...state.drawPile];
+  return [
+    ...state.hand,
+    ...state.drawPile,
+    ...state.discardPile,
+    ...state.playedCardsThisTurn
+  ];
 }
 
 function getRemovableCards(state: EventGameState) {
@@ -426,7 +459,9 @@ function pickNoiseCard(cards: EventCard[], rng: Rng) {
 }
 
 function getCardTemplate(cardId: string) {
-  const card = TEST_EVENT_CARDS.find((item) => item.id === cardId);
+  const card = [...FORMAL_EVENT_CARDS, ...TEST_EVENT_CARDS].find(
+    (item) => item.id === cardId
+  );
 
   if (!card) {
     throw new Error(`Unknown reward card template: ${cardId}`);
@@ -436,7 +471,9 @@ function getCardTemplate(cardId: string) {
 }
 
 function getToolTemplate(toolId: string) {
-  const tool = TEST_EVENT_TOOLS.find((item) => item.id === toolId);
+  const tool = [...FORMAL_EVENT_TOOLS, ...TEST_EVENT_TOOLS].find(
+    (item) => item.id === toolId
+  );
 
   if (!tool) {
     throw new Error(`Unknown reward tool template: ${toolId}`);
@@ -456,6 +493,7 @@ function cloneCardForDeck(card: EventCard, id: string): EventCard {
 function cloneTool(tool: EventTool): EventTool {
   return {
     ...tool,
+    triggerEvents: tool.triggerEvents ? [...tool.triggerEvents] : undefined,
     trigger: { ...tool.trigger, meta: tool.trigger.meta ? { ...tool.trigger.meta } : undefined },
     effects: tool.effects.map((effect) => ({ ...effect }))
   };
@@ -492,11 +530,17 @@ function upgradeCardInDeck(state: EventGameState, cardId: string) {
 
   state.hand = state.hand.map(upgrade);
   state.drawPile = state.drawPile.map(upgrade);
+  state.discardPile = state.discardPile.map(upgrade);
+  state.playedCardsThisTurn = state.playedCardsThisTurn.map(upgrade);
 }
 
 function removeCardFromDeck(state: EventGameState, cardId: string) {
   state.hand = state.hand.filter((card) => card.id !== cardId);
   state.drawPile = state.drawPile.filter((card) => card.id !== cardId);
+  state.discardPile = state.discardPile.filter((card) => card.id !== cardId);
+  state.playedCardsThisTurn = state.playedCardsThisTurn.filter(
+    (card) => card.id !== cardId
+  );
 }
 
 function roundToTwoDecimals(value: number) {

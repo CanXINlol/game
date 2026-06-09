@@ -12,6 +12,21 @@ export interface DeckState {
   reshuffleCount: number;
 }
 
+export interface ContinuousDeckCard {
+  exhaust?: boolean;
+  retain?: boolean;
+}
+
+export interface ContinuousDeckState<TCard extends ContinuousDeckCard> {
+  seed: string;
+  hand: TCard[];
+  drawPile: TCard[];
+  discardPile: TCard[];
+  playedCardsThisTurn: TCard[];
+  reshuffleCount: number;
+  cardsDrawnThisTurn: number;
+}
+
 export function createStartingDeck(seed: string) {
   return createRng(seed).shuffle(STOCK_CARDS).slice(0, 20);
 }
@@ -118,6 +133,74 @@ export function discardSelectedCards<TState extends DeckState>(
   };
 }
 
+export function drawFromContinuousDeck<
+  TCard extends ContinuousDeckCard,
+  TState extends ContinuousDeckState<TCard>
+>(state: TState, count: number): TState {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error('drawFromContinuousDeck count must be a non-negative integer.');
+  }
+
+  let nextState = cloneContinuousDeckState(state);
+
+  for (let drawnCount = 0; drawnCount < count; drawnCount += 1) {
+    if (nextState.drawPile.length === 0) {
+      nextState = reshuffleContinuousDiscardIntoDrawPile(nextState);
+    }
+
+    if (nextState.drawPile.length === 0) {
+      break;
+    }
+
+    const [drawnCard, ...remainingDrawPile] = nextState.drawPile;
+    nextState = {
+      ...nextState,
+      drawPile: remainingDrawPile,
+      hand: [...nextState.hand, drawnCard],
+      cardsDrawnThisTurn: nextState.cardsDrawnThisTurn + 1
+    };
+  }
+
+  return nextState;
+}
+
+export function reshuffleContinuousDiscardIntoDrawPile<
+  TCard extends ContinuousDeckCard,
+  TState extends ContinuousDeckState<TCard>
+>(state: TState): TState {
+  if (state.drawPile.length > 0 || state.discardPile.length === 0) {
+    return cloneContinuousDeckState(state);
+  }
+
+  const rng = createRng(`${state.seed}:event-reshuffle:${state.reshuffleCount}`);
+
+  return {
+    ...state,
+    drawPile: rng.shuffle(state.discardPile),
+    discardPile: [],
+    reshuffleCount: state.reshuffleCount + 1
+  };
+}
+
+export function discardContinuousTurn<
+  TCard extends ContinuousDeckCard,
+  TState extends ContinuousDeckState<TCard>
+>(state: TState): TState {
+  const retainedHand = state.hand.filter((card) => card.retain);
+  const discardedHand = state.hand.filter((card) => !card.retain);
+  const discardedPlayedCards = state.playedCardsThisTurn.filter(
+    (card) => !card.exhaust
+  );
+
+  return {
+    ...state,
+    hand: retainedHand,
+    playedCardsThisTurn: [],
+    discardPile: [...state.discardPile, ...discardedHand, ...discardedPlayedCards],
+    cardsDrawnThisTurn: 0
+  };
+}
+
 function cloneDeckState<TState extends DeckState>(state: TState): TState {
   return {
     ...state,
@@ -125,5 +208,18 @@ function cloneDeckState<TState extends DeckState>(state: TState): TState {
     hand: [...state.hand],
     discardPile: [...state.discardPile],
     selectedCardIds: [...state.selectedCardIds]
+  };
+}
+
+function cloneContinuousDeckState<
+  TCard extends ContinuousDeckCard,
+  TState extends ContinuousDeckState<TCard>
+>(state: TState): TState {
+  return {
+    ...state,
+    hand: [...state.hand],
+    drawPile: [...state.drawPile],
+    discardPile: [...state.discardPile],
+    playedCardsThisTurn: [...state.playedCardsThisTurn]
   };
 }

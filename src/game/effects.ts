@@ -1,5 +1,6 @@
 import { applyComboEvent } from './combo';
 import { getDayChoiceLabel } from './dayChoices';
+import { drawFromContinuousDeck } from './deck';
 import type { GameEvent, GameEventType } from './events';
 import {
   applyDirectMarketPressureDamage,
@@ -7,19 +8,43 @@ import {
 } from './marketPressure';
 import type { EventGameState } from './playCard';
 import { generateRewardChoices } from './rewards';
+import type { EventCardCost, EventCardRole } from './types';
 
 export interface EventCard {
   id: string;
   name: string;
   sector: string;
   rank: number;
+  cardType?: FormalCardType;
+  risk?: string;
+  tags?: string[];
+  baseReturn?: number;
+  baseRisk?: number;
+  playEffect?: string;
+  cost: EventCardCost;
+  cardRole: EventCardRole;
+  exhaust?: boolean;
+  retain?: boolean;
   effects: CardEffect[];
 }
+
+export type FormalCardType =
+  | 'BUY'
+  | 'CHASE'
+  | 'DIP_BUY'
+  | 'LEVERAGE'
+  | 'CASH_OUT'
+  | 'DRAW'
+  | 'COPY'
+  | 'SECTOR'
+  | 'RISK'
+  | 'FINISHER';
 
 export type CardEffect =
   | { type: 'GAIN_PROFIT'; value: number; sector?: string }
   | { type: 'GAIN_RISK'; value: number }
   | { type: 'REDUCE_RISK'; value: number }
+  | { type: 'GAIN_COMBO'; value: number }
   | { type: 'TRIGGER_SECTOR'; sector: string }
   | { type: 'TRIGGER_HOT_SECTOR' }
   | { type: 'TRIGGER_LIMIT_UP'; profit?: number; comboGain?: number }
@@ -36,6 +61,7 @@ export interface EventTool {
   id: string;
   name: string;
   description: string;
+  triggerEvents?: GameEventType[];
   trigger: ToolTrigger;
   effects: ToolEventEffect[];
   limitPerDay?: number;
@@ -64,6 +90,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '幻芯买入',
     sector: 'TECH',
     rank: 3,
+    cost: 1,
+    cardRole: 'STARTER',
     effects: [
       { type: 'GAIN_PROFIT', value: 20, sector: 'TECH' },
       { type: 'TRIGGER_SECTOR', sector: 'TECH' }
@@ -74,6 +102,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '涨停追击',
     sector: 'TECH',
     rank: 6,
+    cost: 2,
+    cardRole: 'PAYOFF',
     effects: [{ type: 'TRIGGER_LIMIT_UP_IF_PROFIT', profit: 25, comboGain: 1 }]
   },
   {
@@ -81,6 +111,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '融资加仓',
     sector: 'FINANCE',
     rank: 8,
+    cost: 2,
+    cardRole: 'PAYOFF',
     effects: [
       { type: 'GAIN_PROFIT', value: 40, sector: 'FINANCE' },
       { type: 'GAIN_RISK', value: 20 }
@@ -91,6 +123,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '量化复制',
     sector: 'TECH',
     rank: 5,
+    cost: 2,
+    cardRole: 'EXTENDER',
     effects: [{ type: 'COPY_PREVIOUS_CARD' }]
   },
   {
@@ -98,6 +132,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '热点轮动',
     sector: 'CONSUMER',
     rank: 4,
+    cost: 0,
+    cardRole: 'EXTENDER',
     effects: [
       { type: 'TRIGGER_HOT_SECTOR' },
       { type: 'DRAW_CARD', value: 1 }
@@ -108,6 +144,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '止盈保险',
     sector: 'FINANCE',
     rank: 2,
+    cost: 0,
+    cardRole: 'DEFENSE',
     effects: [{ type: 'CASH_OUT', ratio: 0.25, riskReduction: 10 }]
   },
   {
@@ -115,6 +153,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '妖股点火',
     sector: 'ENERGY',
     rank: 9,
+    cost: 2,
+    cardRole: 'PAYOFF',
     effects: [
       { type: 'TRIGGER_LIMIT_UP', comboGain: 2 },
       { type: 'GAIN_RISK', value: 15 }
@@ -125,6 +165,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '低吸反弹',
     sector: 'MEDICAL',
     rank: 4,
+    cost: 1,
+    cardRole: 'DEFENSE',
     effects: [
       {
         type: 'REBOUND_IF_EVENT',
@@ -139,6 +181,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '空头回补',
     sector: 'FINANCE',
     rank: 7,
+    cost: 1,
+    cardRole: 'PAYOFF',
     effects: [{ type: 'DAMAGE_PRESSURE_IF_HP_BELOW', thresholdRatio: 0.5, damage: 35 }]
   },
   {
@@ -146,6 +190,8 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     name: '收盘清算',
     sector: 'CONSUMER',
     rank: 2,
+    cost: 3,
+    cardRole: 'FINISHER',
     effects: [
       { type: 'GAIN_PROFIT_FROM_COMBO', profitPerCombo: 18 },
       { type: 'END_TRADE' }
@@ -247,6 +293,10 @@ export function createCardEffectEvents(
 
     if (effect.type === 'REDUCE_RISK') {
       events.push(createRiskReducedEvent(state, card.id, card.name, effect.value));
+    }
+
+    if (effect.type === 'GAIN_COMBO') {
+      events.push(createComboEvent(state, card.id, card.name, effect.value));
     }
 
     if (effect.type === 'TRIGGER_SECTOR') {
@@ -501,21 +551,32 @@ function applyProfitMultiplierToEvent(
   state: EventGameState,
   event: GameEvent
 ): GameEvent {
-  if (event.type !== 'PROFIT_GAINED' || state.profitMultiplier === 1) {
+  if (event.type !== 'PROFIT_GAINED') {
     return event;
   }
 
   const baseValue = event.value ?? 0;
-  const value = roundToTwoDecimals(baseValue * state.profitMultiplier);
+  const turboturnMultiplier = state.turboturnMultiplier ?? 1;
+  const totalMultiplier = roundToTwoDecimals(
+    state.profitMultiplier * turboturnMultiplier
+  );
+
+  if (totalMultiplier === 1) {
+    return event;
+  }
+
+  const value = roundToTwoDecimals(baseValue * totalMultiplier);
 
   return {
     ...event,
     value,
-    message: `${event.sourceName} 获得 ${value} 收益（基础 ${baseValue} x${state.profitMultiplier.toFixed(2)}）。`,
+    message: `${event.sourceName} 获得 ${value} 收益（基础 ${baseValue} x${totalMultiplier.toFixed(2)}）。`,
     meta: {
       ...event.meta,
       baseValue,
-      profitMultiplier: state.profitMultiplier
+      profitMultiplier: state.profitMultiplier,
+      turboturnMultiplier,
+      totalMultiplier
     }
   };
 }
@@ -725,15 +786,13 @@ function createDrawEvents(
 }
 
 function drawCardsIntoHand(state: EventGameState, count: number) {
-  for (let index = 0; index < count; index += 1) {
-    const drawnCard = state.drawPile.shift();
+  const nextState = drawFromContinuousDeck(state, count);
 
-    if (!drawnCard) {
-      return;
-    }
-
-    state.hand.push(drawnCard);
-  }
+  state.hand = nextState.hand;
+  state.drawPile = nextState.drawPile;
+  state.discardPile = nextState.discardPile;
+  state.reshuffleCount = nextState.reshuffleCount;
+  state.cardsDrawnThisTurn = nextState.cardsDrawnThisTurn;
 }
 
 function matchesToolTrigger(

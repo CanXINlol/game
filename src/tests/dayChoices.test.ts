@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyDayChoice, getDayChoicePreviews } from '../game/dayChoices';
+import { TEST_EVENT_CARDS } from '../game/effects';
 import { createTestEventGameState, playCard } from '../game/playCard';
 
 function createDayEndState() {
@@ -75,6 +76,7 @@ describe('day-end greed choices', () => {
     const state = createDayEndState();
 
     applyDayChoice(state, 'leverage');
+    state.hand = [getTestCard('test-card-tech-buy')];
     const afterPlay = playCard(state, 'test-card-tech-buy');
 
     expect(afterPlay.combo.currentChainProfit).toBeGreaterThan(100);
@@ -103,6 +105,7 @@ describe('day-end greed choices', () => {
 
     applyDayChoice(state, 'leverage');
     state.risk = 88;
+    state.hand = [getTestCard('test-card-margin-add')];
     const afterRiskCard = playCard(state, 'test-card-margin-add');
 
     expect(afterRiskCard.phase).toBe('bankrupt');
@@ -110,3 +113,13 @@ describe('day-end greed choices', () => {
     expect(afterRiskCard.runHistory.at(-1)).toContain('最后一次选择 加杠杆');
   });
 });
+
+function getTestCard(cardId: string) {
+  const card = TEST_EVENT_CARDS.find((item) => item.id === cardId);
+
+  if (!card) {
+    throw new Error(`Missing test card ${cardId}`);
+  }
+
+  return { ...card, effects: card.effects.map((effect) => ({ ...effect })) };
+}

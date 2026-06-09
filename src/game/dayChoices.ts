@@ -1,4 +1,5 @@
 import { getComboMultiplier } from './combo';
+import { discardContinuousTurn, drawFromContinuousDeck } from './deck';
 import { createMarketPressureByIndex } from './marketPressure';
 import type { EventGameState } from './playCard';
 
@@ -19,6 +20,8 @@ const CHOICE_LABELS: Record<DayChoiceId, string> = {
   leverage: '加杠杆',
   continueTrading: '继续交易'
 };
+
+const EVENT_HAND_SIZE = 5;
 
 export function getDayChoiceLabel(choice: string | null) {
   if (choice && choice in CHOICE_LABELS) {
@@ -130,10 +133,18 @@ export function applyDayChoice(
 }
 
 function startNextTradingDay(state: EventGameState, message: string) {
+  const preparedState = discardContinuousTurn(state);
+  state.hand = preparedState.hand;
+  state.discardPile = preparedState.discardPile;
+  state.playedCardsThisTurn = preparedState.playedCardsThisTurn;
+  state.cardsDrawnThisTurn = preparedState.cardsDrawnThisTurn;
+
   state.day += 1;
   state.profitMultiplier = state.nextProfitMultiplier;
   state.maxAp = state.baseMaxAp + state.nextApBonus;
   state.ap = state.maxAp;
+  state.maxActionPoints = state.maxAp;
+  state.actionPoints = state.ap;
   state.maxRisk = state.baseMaxRisk - state.nextMaxRiskPenalty;
   state.nextProfitMultiplier = 1;
   state.nextApBonus = 0;
@@ -147,14 +158,24 @@ function startNextTradingDay(state: EventGameState, message: string) {
   state.rewardChoices = [];
   state.playedCardsThisTurn = [];
   state.lastPlayedCard = null;
+  state.lastPlayedCost = null;
+  state.turboturnStep = 0;
+  state.turboturnMultiplier = 1;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
   state.triggeredComboMilestones = {};
+  drawOpeningHand(state);
   applyNextDayCombo(state);
   state.combo.eventLog.push(message);
 }
 
 function startNextMarketPressureForGreed(state: EventGameState) {
+  const preparedState = discardContinuousTurn(state);
+  state.hand = preparedState.hand;
+  state.discardPile = preparedState.discardPile;
+  state.playedCardsThisTurn = preparedState.playedCardsThisTurn;
+  state.cardsDrawnThisTurn = preparedState.cardsDrawnThisTurn;
+
   state.marketPressureIndex += 1;
   state.marketPressure = {
     ...createMarketPressureByIndex(state.seed, state.marketPressureIndex),
@@ -163,14 +184,31 @@ function startNextMarketPressureForGreed(state: EventGameState) {
   state.phase = 'playing';
   state.rewardChoices = [];
   state.ap = state.maxAp;
+  state.maxActionPoints = state.maxAp;
+  state.actionPoints = state.ap;
   state.playedCardsThisTurn = [];
   state.lastPlayedCard = null;
+  state.lastPlayedCost = null;
+  state.turboturnStep = 0;
+  state.turboturnMultiplier = 1;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
   state.triggeredComboMilestones = {};
+  drawOpeningHand(state);
   state.combo.eventLog.push(
     `继续交易：新的 MarketPressure 已生成，奖励稀有度 +${state.rewardRarityBonus}。`
   );
+}
+
+function drawOpeningHand(state: EventGameState) {
+  const drawCount = Math.max(0, EVENT_HAND_SIZE - state.hand.length);
+  const nextState = drawFromContinuousDeck(state, drawCount);
+
+  state.hand = nextState.hand;
+  state.drawPile = nextState.drawPile;
+  state.discardPile = nextState.discardPile;
+  state.reshuffleCount = nextState.reshuffleCount;
+  state.cardsDrawnThisTurn = nextState.cardsDrawnThisTurn;
 }
 
 function applyNextDayCombo(state: EventGameState) {

@@ -19,6 +19,8 @@ export type GameEventType =
   | 'CASH_OUT'
   | 'LOSS_TAKEN'
   | 'TRADE_ENDED'
+  | 'TURBOTURN_STEP'
+  | 'TURBOTURN_COMPLETE'
   | 'EVENT_QUEUE_HALTED';
 
 export interface GameEvent {

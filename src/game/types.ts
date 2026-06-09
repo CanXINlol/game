@@ -30,6 +30,15 @@ export interface StockCard {
   description: string;
 }
 
+export type EventCardCost = 0 | 1 | 2 | 3;
+
+export type EventCardRole =
+  | 'STARTER'
+  | 'EXTENDER'
+  | 'PAYOFF'
+  | 'DEFENSE'
+  | 'FINISHER';
+
 export type ToolCategory =
   | 'GREED'
   | 'RISK_CONTROL'
