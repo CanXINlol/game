@@ -98,6 +98,9 @@ export interface RunState {
   tools: Tool[];
   market: MarketState;
   floatingProfit: number;
+  floatingProfitCarryMultiplier: number;
+  nextSettlementMultiplier: number;
+  temporaryMaxRiskPenalty: number;
   leverage: number;
   risk: number;
   maxRisk: number;

@@ -14,6 +14,7 @@ import type {
 } from './types';
 
 const TOOL_MULTIPLIER = 1;
+const BASE_RISK_SCALE = 0.55;
 
 const LEVERAGE_CONFIG: Record<
   LeverageLevel,
@@ -29,17 +30,29 @@ export function settleTradingDay(
   comboResult: ComboResult,
   marketState: MarketState,
   currentRunState: Pick<RunState, 'floatingProfit' | 'risk'> &
-    Partial<Pick<RunState, 'maxRisk'>>,
+    Partial<
+      Pick<
+        RunState,
+        'maxRisk' | 'floatingProfitCarryMultiplier' | 'nextSettlementMultiplier' | 'temporaryMaxRiskPenalty'
+      >
+    >,
   leverageLevel: LeverageLevel
 ): SettlementResult {
   const leverageConfig = LEVERAGE_CONFIG[leverageLevel];
-  const maxRisk = currentRunState.maxRisk ?? MAX_RISK;
+  const maxRisk = Math.max(
+    1,
+    (currentRunState.maxRisk ?? MAX_RISK) -
+      (currentRunState.temporaryMaxRiskPenalty ?? 0)
+  );
+  const carryMultiplier = currentRunState.floatingProfitCarryMultiplier ?? 1;
+  const extraSettlementMultiplier = currentRunState.nextSettlementMultiplier ?? 1;
   const baseReturn = sumBy(selectedCards, (card) => card.baseReturn);
   const baseRisk = sumBy(selectedCards, (card) => card.baseRisk);
   const comboMultiplier = comboResult.multiplier;
   const marketMultiplier = getMarketMultiplier(selectedCards, marketState);
   const marketRiskModifier = getMarketRiskModifier(selectedCards, marketState);
-  const leverageMultiplier = leverageConfig.multiplier;
+  const leverageMultiplier =
+    leverageConfig.multiplier * carryMultiplier * extraSettlementMultiplier;
   const grossProfit = roundToTwoDecimals(
     baseReturn *
       comboMultiplier *
@@ -48,7 +61,7 @@ export function settleTradingDay(
       leverageMultiplier
   );
   const riskGain = roundToTwoDecimals(
-    baseRisk * comboResult.riskModifier * marketRiskModifier +
+    baseRisk * BASE_RISK_SCALE * comboResult.riskModifier * marketRiskModifier +
       leverageConfig.extraRisk
   );
   const newFloatingProfit = roundToTwoDecimals(
@@ -130,7 +143,7 @@ function createSummaryText(input: {
     `工具倍率暂为 x${TOOL_MULTIPLIER}`,
     `杠杆 ${input.leverageLevel} 档收益 x${input.leverageMultiplier}，额外风险 +${input.leverageExtraRisk}`,
     `本日毛收益 ${input.grossProfit}`,
-    `风险来自基础风险 ${input.baseRisk}、牌型、市场和杠杆，合计 +${input.riskGain}`,
+    `风险来自基础风险 ${input.baseRisk} 的结算折算、牌型、市场和杠杆，合计 +${input.riskGain}`,
     `当前浮盈 ${input.newFloatingProfit}，风险 ${input.newRisk}/${input.maxRisk}`
   ].join('；');
 }
