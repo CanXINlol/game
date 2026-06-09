@@ -2,8 +2,10 @@ import type { GameStatus } from '../store/gameStore';
 
 export function RunStatusPanel(props: {
   gameStatus: GameStatus;
+  day: number;
   floatingProfit: number;
   lockedProfit: number;
+  profitMultiplier: number;
   risk: number;
   maxRisk: number;
   ap: number;
@@ -18,6 +20,10 @@ export function RunStatusPanel(props: {
           <dd>{formatStatus(props.gameStatus)}</dd>
         </div>
         <div>
+          <dt>Day</dt>
+          <dd>{props.day}</dd>
+        </div>
+        <div>
           <dt>AP</dt>
           <dd>
             {props.ap} / {props.maxAp}
@@ -30,6 +36,10 @@ export function RunStatusPanel(props: {
         <div>
           <dt>LockedProfit</dt>
           <dd>{props.lockedProfit.toFixed(1)}</dd>
+        </div>
+        <div>
+          <dt>Profit x</dt>
+          <dd>x{props.profitMultiplier.toFixed(2)}</dd>
         </div>
         <div>
           <dt>Risk / MaxRisk</dt>

@@ -1,4 +1,5 @@
 import { applyComboEvent } from './combo';
+import { getDayChoiceLabel } from './dayChoices';
 import type { GameEvent, GameEventType } from './events';
 import {
   applyDirectMarketPressureDamage,
@@ -417,29 +418,33 @@ export function resolveGameEvent(
   state: EventGameState,
   event: GameEvent
 ): GameEvent[] {
-  state.combo.eventLog.push(event.message);
-  state.resolvedEventTypes.push(event.type);
-  state.combo = applyComboEvent(state.combo, event);
+  const resolvedEvent = applyProfitMultiplierToEvent(state, event);
+
+  state.combo.eventLog.push(resolvedEvent.message);
+  state.resolvedEventTypes.push(resolvedEvent.type);
+  state.combo = applyComboEvent(state.combo, resolvedEvent);
 
   const nextEvents: GameEvent[] = [];
 
-  if (event.type === 'CARD_DRAWN') {
-    drawCardsIntoHand(state, event.value ?? 1);
+  if (resolvedEvent.type === 'CARD_DRAWN') {
+    drawCardsIntoHand(state, resolvedEvent.value ?? 1);
   }
 
-  if (event.type === 'CASH_OUT') {
-    state.lockedProfit = roundToTwoDecimals(state.lockedProfit + (event.value ?? 0));
+  if (resolvedEvent.type === 'CASH_OUT') {
+    state.lockedProfit = roundToTwoDecimals(
+      state.lockedProfit + (resolvedEvent.value ?? 0)
+    );
   }
 
-  if (event.type === 'RISK_GAINED') {
-    state.risk = roundToTwoDecimals(state.risk + (event.value ?? 0));
+  if (resolvedEvent.type === 'RISK_GAINED') {
+    state.risk = roundToTwoDecimals(state.risk + (resolvedEvent.value ?? 0));
 
     if (state.risk >= state.maxRisk) {
       nextEvents.push(
         state.createEvent({
           type: 'BANKRUPTCY_WARNING',
-          sourceId: event.sourceId,
-          sourceName: event.sourceName,
+          sourceId: resolvedEvent.sourceId,
+          sourceName: resolvedEvent.sourceName,
           message: `风险达到 ${state.risk}/${state.maxRisk}，触发爆仓警告。`,
           value: state.risk
         })
@@ -447,37 +452,72 @@ export function resolveGameEvent(
     }
   }
 
-  if (event.type === 'RISK_REDUCED') {
-    state.risk = Math.max(0, roundToTwoDecimals(state.risk - (event.value ?? 0)));
+  if (resolvedEvent.type === 'RISK_REDUCED') {
+    state.risk = Math.max(
+      0,
+      roundToTwoDecimals(state.risk - (resolvedEvent.value ?? 0))
+    );
   }
 
-  if (event.type === 'PROFIT_GAINED') {
-    nextEvents.push(...applyMarketPressureEvent(state, event));
+  if (resolvedEvent.type === 'PROFIT_GAINED') {
+    nextEvents.push(...applyMarketPressureEvent(state, resolvedEvent));
   }
 
-  if (event.type === 'MARKET_PRESSURE_DAMAGED' && event.meta?.directDamage) {
-    nextEvents.push(...applyDirectMarketPressureDamage(state, event));
+  if (
+    resolvedEvent.type === 'MARKET_PRESSURE_DAMAGED' &&
+    resolvedEvent.meta?.directDamage
+  ) {
+    nextEvents.push(...applyDirectMarketPressureDamage(state, resolvedEvent));
   }
 
-  if (event.type === 'MARKET_PRESSURE_CLEARED') {
+  if (resolvedEvent.type === 'MARKET_PRESSURE_CLEARED') {
     state.phase = 'reward';
   }
 
-  if (event.type === 'REWARD_DROPPED') {
+  if (resolvedEvent.type === 'REWARD_DROPPED') {
     state.rewardChoices = generateRewardChoices(state);
   }
 
-  if (event.type === 'BANKRUPTCY_WARNING') {
+  if (resolvedEvent.type === 'BANKRUPTCY_WARNING') {
     state.phase = 'bankrupt';
+    state.runHistory.push(
+      `爆仓：Risk ${state.risk}/${state.maxRisk}，最后一次选择 ${getDayChoiceLabel(state.lastDayChoice)}。`
+    );
+    state.combo.eventLog.push(
+      `最后一次选择：${getDayChoiceLabel(state.lastDayChoice)}。`
+    );
   }
 
-  if (event.type === 'TRADE_ENDED' && state.phase === 'playing') {
+  if (resolvedEvent.type === 'TRADE_ENDED' && state.phase === 'playing') {
     state.phase = 'dayEnd';
   }
 
-  nextEvents.push(...resolveToolTriggers(state, event));
+  nextEvents.push(...resolveToolTriggers(state, resolvedEvent));
 
   return nextEvents;
+}
+
+function applyProfitMultiplierToEvent(
+  state: EventGameState,
+  event: GameEvent
+): GameEvent {
+  if (event.type !== 'PROFIT_GAINED' || state.profitMultiplier === 1) {
+    return event;
+  }
+
+  const baseValue = event.value ?? 0;
+  const value = roundToTwoDecimals(baseValue * state.profitMultiplier);
+
+  return {
+    ...event,
+    value,
+    message: `${event.sourceName} 获得 ${value} 收益（基础 ${baseValue} x${state.profitMultiplier.toFixed(2)}）。`,
+    meta: {
+      ...event.meta,
+      baseValue,
+      profitMultiplier: state.profitMultiplier
+    }
+  };
 }
 
 function resolveToolTriggers(state: EventGameState, event: GameEvent): GameEvent[] {

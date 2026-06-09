@@ -4,6 +4,7 @@ export function ActionPanel(props: {
   gameStatus: GameStatus;
   onStart: () => void;
   onRestart: () => void;
+  lastChoiceLabel?: string;
 }) {
   if (props.gameStatus === 'start') {
     return (
@@ -23,7 +24,7 @@ export function ActionPanel(props: {
       <section className="panel action-panel result-panel">
         <p className="section-label">Reward</p>
         <h2>奖励阶段</h2>
-        <p className="muted">请在主区域选择奖励，并决定下一压力盘或日终。</p>
+        <p className="muted">请在主区域选择奖励，然后进入日终贪婪选择。</p>
         <button className="ghost-button" type="button" onClick={props.onRestart}>
           重新开始
         </button>
@@ -36,6 +37,7 @@ export function ActionPanel(props: {
       <section className="panel action-panel result-panel danger-panel">
         <p className="section-label">Bankrupt</p>
         <h2>Risk 达到 maxRisk，爆仓</h2>
+        <p className="muted">最后一次选择：{props.lastChoiceLabel ?? '无'}。</p>
         <button className="primary-action" type="button" onClick={props.onRestart}>
           重新开始
         </button>

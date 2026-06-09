@@ -119,7 +119,7 @@ export function enterDayEndAfterReward(state: EventGameState): EventGameState {
 }
 
 function buildRewardCandidates(state: EventGameState, rng: Rng): RewardOption[] {
-  const candidates: RewardOption[] = [];
+  const candidates: Array<RewardOption | null> = [];
   const rewardIndex = state.rewardsTakenCount;
 
   candidates.push(createAddCardReward(state, rng, rewardIndex));

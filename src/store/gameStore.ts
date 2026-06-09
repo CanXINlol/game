@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import {
+  applyDayChoice,
+  getDayChoicePreviews,
+  type DayChoiceId,
+  type DayChoicePreview
+} from '../game/dayChoices';
+import {
   applyRewardChoice,
   enterDayEndAfterReward,
   startNextMarketPressure
@@ -22,6 +28,7 @@ interface GameStoreState {
   selectReward: (rewardId: string) => void;
   continueAfterReward: () => void;
   endDayAfterReward: () => void;
+  chooseDayEnd: (choice: DayChoiceId) => void;
   resetRun: () => void;
 }
 
@@ -38,6 +45,7 @@ function cloneEventState(state: EventGameState): EventGameState {
     marketPressure: { ...state.marketPressure },
     tools: [...state.tools],
     rewardChoices: [...state.rewardChoices],
+    runHistory: [...state.runHistory],
     resolvedEventTypes: [...state.resolvedEventTypes],
     toolUseCounts: { ...state.toolUseCounts },
     triggeredComboMilestones: Object.fromEntries(
@@ -129,6 +137,22 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       lockedProfit: nextState.lockedProfit
     });
   },
+  chooseDayEnd: (choice) => {
+    const { eventState, gameStatus } = get();
+
+    if (!eventState || gameStatus !== 'dayEnd') {
+      return;
+    }
+
+    const nextState = cloneEventState(eventState);
+    applyDayChoice(nextState, choice);
+
+    set({
+      eventState: nextState,
+      gameStatus: nextState.phase,
+      lockedProfit: nextState.lockedProfit
+    });
+  },
   resetRun: () => {
     set({
       lockedProfit: 0,
@@ -141,3 +165,11 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 export function getFloatingProfit(state: EventGameState | null) {
   return state?.combo.currentChainProfit ?? 0;
 }
+
+export function getDayEndChoicePreviews(
+  state: EventGameState | null
+): DayChoicePreview[] {
+  return state ? getDayChoicePreviews(state) : [];
+}
+
+export type { DayChoiceId };

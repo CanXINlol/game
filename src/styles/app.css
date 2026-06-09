@@ -615,6 +615,29 @@ button:focus-visible,
   padding: 16px;
 }
 
+.day-choice-panel {
+  padding: 16px;
+}
+
+.day-choice-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.day-choice-card {
+  min-height: 178px;
+}
+
+.greedy-choice-card {
+  border-color: rgba(216, 78, 69, 0.48);
+  background: rgba(216, 78, 69, 0.12);
+}
+
+.greedy-choice-card:hover:not(:disabled) {
+  border-color: rgba(216, 78, 69, 0.78);
+  background: rgba(216, 78, 69, 0.18);
+}
+
 .reward-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -683,6 +706,10 @@ button:focus-visible,
     grid-template-columns: 1fr;
   }
 
+  .day-choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .compact-stats,
   .event-status-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -704,8 +731,9 @@ button:focus-visible,
   .settlement-grid,
   .action-row,
   .hand-grid,
-  .event-card-grid,
-  .compact-stats,
+    .event-card-grid,
+    .day-choice-grid,
+    .compact-stats,
   .event-status-bar {
     grid-template-columns: 1fr;
   }

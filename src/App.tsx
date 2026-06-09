@@ -1,5 +1,6 @@
 import { ActionPanel } from './components/ActionPanel';
 import { ComboMeter } from './components/ComboMeter';
+import { DayChoicePanel } from './components/DayChoicePanel';
 import { EventLogPanel } from './components/EventLogPanel';
 import { HandArea } from './components/HandArea';
 import { MarketPressurePanel } from './components/MarketPressurePanel';
@@ -7,7 +8,12 @@ import { PlayedCardsPanel } from './components/PlayedCardsPanel';
 import { RewardPanel } from './components/RewardPanel';
 import { RunStatusPanel } from './components/RunStatusPanel';
 import { ToolPanel } from './components/ToolPanel';
-import { getFloatingProfit, useGameStore } from './store/gameStore';
+import {
+  getDayEndChoicePreviews,
+  getFloatingProfit,
+  useGameStore
+} from './store/gameStore';
+import { getDayChoiceLabel } from './game/dayChoices';
 import './styles/app.css';
 
 export default function App() {
@@ -20,6 +26,7 @@ export default function App() {
     selectReward,
     continueAfterReward,
     endDayAfterReward,
+    chooseDayEnd,
     resetRun
   } = useGameStore();
 
@@ -49,6 +56,7 @@ export default function App() {
           gameStatus={gameStatus}
           onStart={startNewRun}
           onRestart={resetRun}
+          lastChoiceLabel={getDayChoiceLabel(eventState.lastDayChoice)}
         />
       </header>
 
@@ -56,8 +64,10 @@ export default function App() {
         <div className="event-main-stack">
           <RunStatusPanel
             gameStatus={gameStatus}
+            day={eventState.day}
             floatingProfit={floatingProfit}
             lockedProfit={lockedProfit}
+            profitMultiplier={eventState.profitMultiplier}
             risk={eventState.risk}
             maxRisk={eventState.maxRisk}
             ap={eventState.ap}
@@ -70,6 +80,14 @@ export default function App() {
               onSelectReward={selectReward}
               onContinueTrading={continueAfterReward}
               onEndDay={endDayAfterReward}
+            />
+          ) : gameStatus === 'dayEnd' ? (
+            <DayChoicePanel
+              floatingProfit={floatingProfit}
+              risk={eventState.risk}
+              maxRisk={eventState.maxRisk}
+              previews={getDayEndChoicePreviews(eventState)}
+              onChoose={chooseDayEnd}
             />
           ) : (
             <>

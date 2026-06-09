@@ -12,13 +12,10 @@ export function RewardPanel(props: {
       <section className="panel reward-panel">
         <p className="section-label">Reward</p>
         <h2>奖励已领取</h2>
-        <p className="muted">选择继续下一压力盘，或进入日终选择。</p>
+        <p className="muted">进入日终贪婪选择，决定落袋、持有、加杠杆，还是继续交易。</p>
         <div className="reward-action-row">
-          <button className="primary-action" type="button" onClick={props.onContinueTrading}>
-            下一压力盘
-          </button>
-          <button className="ghost-button" type="button" onClick={props.onEndDay}>
-            日终选择
+          <button className="primary-action" type="button" onClick={props.onEndDay}>
+            进入贪婪选择
           </button>
         </div>
       </section>

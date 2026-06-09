@@ -23,13 +23,20 @@ export type EventGamePhase = 'playing' | 'dayEnd' | 'reward' | 'postReward' | 'b
 
 export interface EventGameState {
   seed: string;
+  day: number;
   hand: EventCard[];
   drawPile: EventCard[];
   playedCardsThisTurn: EventCard[];
   ap: number;
   maxAp: number;
+  baseMaxAp: number;
   risk: number;
   maxRisk: number;
+  baseMaxRisk: number;
+  profitMultiplier: number;
+  nextProfitMultiplier: number;
+  nextApBonus: number;
+  nextMaxRiskPenalty: number;
   lockedProfit: number;
   hotSector: string;
   combo: ComboState;
@@ -39,7 +46,10 @@ export interface EventGameState {
   phase: EventGamePhase;
   rewardChoices: RewardOption[];
   rewardsTakenCount: number;
+  rewardRarityBonus: number;
   nextInitialCombo: number;
+  runHistory: string[];
+  lastDayChoice: string | null;
   lastPlayedCard: EventCard | null;
   resolvedEventTypes: GameEventType[];
   toolUseCounts: Record<string, number>;
@@ -63,13 +73,20 @@ export function createTestEventGameState(
   const testDrawPile = TEST_EVENT_CARDS.slice(8);
   const state: EventGameState = {
     seed: 'test-run',
+    day: 1,
     hand: testHand,
     drawPile: testDrawPile,
     playedCardsThisTurn: [],
     ap: 6,
     maxAp: 6,
+    baseMaxAp: 6,
     risk: 0,
     maxRisk: 100,
+    baseMaxRisk: 100,
+    profitMultiplier: 1,
+    nextProfitMultiplier: 1,
+    nextApBonus: 0,
+    nextMaxRiskPenalty: 0,
     lockedProfit: 0,
     hotSector: 'TECH',
     combo: createInitialComboState(),
@@ -79,7 +96,10 @@ export function createTestEventGameState(
     phase: 'playing',
     rewardChoices: [] as RewardOption[],
     rewardsTakenCount: 0,
+    rewardRarityBonus: 0,
     nextInitialCombo: 0,
+    runHistory: [],
+    lastDayChoice: null,
     lastPlayedCard: null,
     resolvedEventTypes: [],
     toolUseCounts: {},
@@ -149,6 +169,7 @@ function cloneEventGameState(state: EventGameState): EventGameState {
     marketPressure: { ...state.marketPressure },
     tools: [...state.tools],
     rewardChoices: [...state.rewardChoices],
+    runHistory: [...state.runHistory],
     resolvedEventTypes: [...state.resolvedEventTypes],
     toolUseCounts: { ...state.toolUseCounts },
     triggeredComboMilestones: Object.fromEntries(
