@@ -45,12 +45,24 @@ export interface MarketState {
   riskLevel: RiskLevel;
 }
 
+export type ComboType =
+  | 'NORMAL'
+  | 'PAIR'
+  | 'THREE'
+  | 'FOUR'
+  | 'STRAIGHT'
+  | 'SAME_SECTOR'
+  | 'FULL_HOUSE'
+  | 'SECTOR_STRAIGHT'
+  | 'HIGH_RISK_BASKET'
+  | 'LOW_RISK_BASKET';
+
 export interface ComboResult {
-  id: string;
-  name: string;
-  matchedCardIds: string[];
+  comboType: ComboType;
+  displayName: string;
   multiplier: number;
-  riskBonus: number;
+  riskModifier: number;
+  description: string;
 }
 
 export interface SettlementResult {
