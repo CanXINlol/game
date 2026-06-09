@@ -68,7 +68,9 @@ export interface RunState {
   day: number;
   deck: StockCard[];
   hand: StockCard[];
+  discardPile: StockCard[];
   selectedCardIds: string[];
+  reshuffleCount: number;
   tools: Tool[];
   market: MarketState;
   floatingProfit: number;
