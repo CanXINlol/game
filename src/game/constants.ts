@@ -4,3 +4,4 @@ export const SELECTION_COUNT = 5;
 export const INITIAL_LEVERAGE = 1;
 export const INITIAL_FLOATING_PROFIT = 0;
 export const INITIAL_RISK = 0;
+export const MAX_RISK = 100;

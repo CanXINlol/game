@@ -69,14 +69,22 @@ export interface ComboResult {
   description: string;
 }
 
+export type LeverageLevel = 0 | 1 | 2;
+export type WarningLevel = 'SAFE' | 'CAUTION' | 'DANGER' | 'BANKRUPT';
+
 export interface SettlementResult {
-  day: number;
-  combo: ComboResult | null;
   baseReturn: number;
-  finalReturn: number;
-  floatingProfit: number;
-  risk: number;
-  isBust: boolean;
+  comboMultiplier: number;
+  marketMultiplier: number;
+  toolMultiplier: number;
+  leverageMultiplier: number;
+  grossProfit: number;
+  riskGain: number;
+  newFloatingProfit: number;
+  newRisk: number;
+  isBankrupt: boolean;
+  warningLevel: WarningLevel;
+  summaryText: string;
 }
 
 export interface RunState {
@@ -92,6 +100,7 @@ export interface RunState {
   floatingProfit: number;
   leverage: number;
   risk: number;
+  maxRisk: number;
   settlements: SettlementResult[];
   status: 'idle' | 'running' | 'won' | 'lost';
 }
