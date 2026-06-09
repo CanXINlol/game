@@ -38,11 +38,15 @@ export interface Tool {
   returnModifier: number;
 }
 
+export type MarketMood = 'BULL' | 'NEUTRAL' | 'BEAR';
+
 export interface MarketState {
   day: number;
-  sentiment: number;
-  hotSectors: Sector[];
-  riskLevel: RiskLevel;
+  mood: MarketMood;
+  hotSector: Sector;
+  weakSector: Sector;
+  volatility: number;
+  news: string;
 }
 
 export type ComboType =
