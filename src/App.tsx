@@ -4,6 +4,7 @@ import { DayChoicePanel } from './components/DayChoicePanel';
 import { EventLogPanel } from './components/EventLogPanel';
 import { HandArea } from './components/HandArea';
 import { MarketPressurePanel } from './components/MarketPressurePanel';
+import { MarketIntentPanel } from './components/MarketIntentPanel';
 import { PlayedCardsPanel } from './components/PlayedCardsPanel';
 import { RewardPanel } from './components/RewardPanel';
 import { RunStatusPanel } from './components/RunStatusPanel';
@@ -23,7 +24,9 @@ export default function App() {
     lockedProfit,
     startNewRun,
     playCard,
+    endTurn,
     selectReward,
+    skipReward,
     continueAfterReward,
     endDayAfterReward,
     chooseDayEnd,
@@ -78,6 +81,7 @@ export default function App() {
               phase={gameStatus === 'postReward' ? 'postReward' : 'reward'}
               choices={eventState.rewardChoices}
               onSelectReward={selectReward}
+              onSkipReward={skipReward}
               onContinueTrading={continueAfterReward}
               onEndDay={endDayAfterReward}
             />
@@ -92,11 +96,15 @@ export default function App() {
           ) : (
             <>
               <MarketPressurePanel pressure={eventState.marketPressure} />
+              <MarketIntentPanel intent={eventState.marketPressure.intent} />
               <HandArea
                 hand={eventState.hand}
                 canPlay={gameStatus === 'playing'}
                 onPlayCard={playCard}
               />
+              <button className="primary-action" type="button" onClick={endTurn}>
+                收盘整理：结算公开意图
+              </button>
               <PlayedCardsPanel cards={eventState.playedCardsThisTurn} />
             </>
           )}

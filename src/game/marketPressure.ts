@@ -1,3 +1,4 @@
+import { createMarketIntent, type MarketIntent } from './encounters';
 import type { GameEvent } from './events';
 import type { EventGameState } from './playCard';
 
@@ -10,7 +11,7 @@ export interface MarketPressure {
   shield: number;
   weaknessSector: string;
   resistanceSector: string;
-  intent: string;
+  intent: MarketIntent;
   reward: string;
 }
 
@@ -18,35 +19,35 @@ export const MARKET_PRESSURE_DEFINITIONS: Omit<MarketPressure, 'hp'>[] = [
   {
     id: 'pressure-tech-rumor',
     name: '题材分歧盘',
-    description: '一段虚构市场压力，正在考验玩家能不能连续打出收益事件。',
+    description: '高弹性的题材盘，会用风险打击逼你提前止盈或硬打穿。',
     maxHp: 120,
     shield: 0,
     weaknessSector: 'TECH',
     resistanceSector: 'FINANCE',
-    intent: '下回合可能提高风险',
+    intent: createMarketIntent('pressure-tech-rumor', 0),
     reward: 'combo 向奖励'
   },
   {
     id: 'pressure-consumer-pullback',
     name: '消费回撤盘',
-    description: '消费板块退潮，需要热点轮动和板块连锁才能击穿。',
+    description: '消费板块退潮，会加厚护盾，逼你考虑轮动或删掉慢牌。',
     maxHp: 100,
     shield: 10,
     weaknessSector: 'CONSUMER',
     resistanceSector: 'MEDICAL',
-    intent: '提高 shield，鼓励多段 combo',
-    reward: 'combo 向奖励'
+    intent: createMarketIntent('pressure-consumer-pullback', 1),
+    reward: '构筑向奖励'
   },
   {
     id: 'pressure-finance-squeeze',
-    name: '金融挤压盘',
-    description: '杠杆收益高，但风险事件会更频繁地打断 combo。',
+    name: '杠杆挤压盘',
+    description: '金融压力盘会放大收益和风险，适合爆发，也容易爆仓。',
     maxHp: 140,
     shield: 0,
     weaknessSector: 'FINANCE',
     resistanceSector: 'ENERGY',
-    intent: '放大风险收益博弈',
-    reward: 'combo 向奖励'
+    intent: createMarketIntent('pressure-finance-squeeze', 2),
+    reward: '风控向奖励'
   }
 ];
 
@@ -54,13 +55,14 @@ export function createTestMarketPressure(): MarketPressure {
   return createMarketPressureByIndex('test-run', 0);
 }
 
-export function createMarketPressureByIndex(_seed: string, index: number): MarketPressure {
+export function createMarketPressureByIndex(seed: string, index: number): MarketPressure {
   const definition =
     MARKET_PRESSURE_DEFINITIONS[index % MARKET_PRESSURE_DEFINITIONS.length];
 
   return {
     ...definition,
-    hp: definition.maxHp
+    hp: definition.maxHp,
+    intent: createMarketIntent(seed, index)
   };
 }
 

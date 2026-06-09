@@ -54,6 +54,10 @@ export interface EventGameState {
   rewardsTakenCount: number;
   rewardRarityBonus: number;
   nextInitialCombo: number;
+  encounterTurn: number;
+  intentProfitMultiplier: number;
+  intentRiskMultiplier: number;
+  weakenedSector: string | null;
   lastPlayedCost: EventCardCost | null;
   turboturnStep: number;
   turboturnMultiplier: number;
@@ -113,6 +117,10 @@ export function createTestEventGameState(
     rewardsTakenCount: 0,
     rewardRarityBonus: 0,
     nextInitialCombo: 0,
+    encounterTurn: 0,
+    intentProfitMultiplier: 1,
+    intentRiskMultiplier: 1,
+    weakenedSector: null,
     lastPlayedCost: null,
     turboturnStep: 0,
     turboturnMultiplier: 1,
@@ -166,6 +174,7 @@ export function createFormalEventGameState(
     discardPile: [],
     tools: cloneTools(FORMAL_EVENT_TOOLS),
     marketPressureIndex: 0,
+    encounterTurn: 0,
     ...overrides
   });
 }

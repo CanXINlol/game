@@ -10,6 +10,7 @@ import { FORMAL_EVENT_CARDS, FORMAL_EVENT_TOOLS } from './formalContent';
 import { createMarketPressureByIndex, type MarketPressure } from './marketPressure';
 import type { EventGameState } from './playCard';
 import { createRng, type Rng } from './rng';
+import { getCardUpgradePreview, upgradeCard } from './upgrades';
 
 export type RewardKind =
   | 'ADD_CARD'
@@ -18,7 +19,8 @@ export type RewardKind =
   | 'REMOVE_CARD'
   | 'REDUCE_RISK'
   | 'LOCK_PROFIT'
-  | 'INITIAL_COMBO';
+  | 'INITIAL_COMBO'
+  | 'SKIP';
 
 export interface RewardOption {
   id: string;
@@ -90,9 +92,15 @@ export function applyRewardChoice(
       return applyLockProfitReward(state, reward);
     case 'INITIAL_COMBO':
       return applyInitialComboReward(state, reward);
+    case 'SKIP':
+      return applySkipReward(state);
     default:
       throw new Error(`Unsupported reward kind.`);
   }
+}
+
+export function skipReward(state: EventGameState): RewardApplyResult {
+  return applySkipReward(state);
 }
 
 export function startNextMarketPressure(state: EventGameState): EventGameState {
@@ -107,6 +115,7 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
 
   state.marketPressureIndex = nextIndex;
   state.marketPressure = nextPressure;
+  state.encounterTurn = 0;
   state.phase = 'playing';
   state.rewardChoices = [];
   state.ap = state.maxAp;
@@ -117,6 +126,9 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
   state.lastPlayedCost = null;
   state.turboturnStep = 0;
   state.turboturnMultiplier = 1;
+  state.intentProfitMultiplier = 1;
+  state.intentRiskMultiplier = 1;
+  state.weakenedSector = null;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
   state.triggeredComboMilestones = {};
@@ -184,7 +196,7 @@ function createAddCardReward(
     id: `reward-${rewardIndex}-add-card-${cardId}`,
     kind: 'ADD_CARD',
     title: `新牌：${card.name}`,
-    description: `将 ${card.name} 加入牌组，强化事件 combo 链路。`,
+    description: `将 ${card.name} 加入 drawPile，强化当前构筑方向。`,
     cardId,
     cardName: card.name
   };
@@ -202,12 +214,13 @@ function createUpgradeCardReward(
   }
 
   const card = rng.pick(deckCards);
+  const preview = getCardUpgradePreview(card);
 
   return {
     id: `reward-${rewardIndex}-upgrade-${card.id}`,
     kind: 'UPGRADE_CARD',
-    title: '牌面升级',
-    description: `升级 ${card.name}：Rank +1，并强化其收益效果。`,
+    title: preview.title,
+    description: preview.description,
     cardId: card.id,
     cardName: card.name
   };
@@ -257,8 +270,8 @@ function createRemoveCardReward(
   return {
     id: `reward-${rewardIndex}-remove-${card.id}`,
     kind: 'REMOVE_CARD',
-    title: '删掉噪音',
-    description: `从牌组移除 ${card.name}，减少无效出牌。`,
+    title: `删牌：${card.name}`,
+    description: `从牌组移除 ${card.name}，提升抽到关键牌的概率。`,
     cardId: card.id,
     cardName: card.name
   };
@@ -409,6 +422,31 @@ function applyInitialComboReward(
   };
 }
 
+function applySkipReward(state: EventGameState): RewardApplyResult {
+  const floatingProfit = state.combo.currentChainProfit;
+
+  if (floatingProfit > 0) {
+    const locked = roundToTwoDecimals(floatingProfit * 0.1);
+    state.lockedProfit = roundToTwoDecimals(state.lockedProfit + locked);
+    state.combo = {
+      ...state.combo,
+      currentChainProfit: roundToTwoDecimals(floatingProfit - locked)
+    };
+    state.rewardsTakenCount += 1;
+
+    return {
+      message: `跳过奖励：锁定 ${locked} 浮盈，保持牌组纯度。`
+    };
+  }
+
+  state.risk = Math.max(0, roundToTwoDecimals(state.risk - 5));
+  state.rewardsTakenCount += 1;
+
+  return {
+    message: '跳过奖励：risk -5，保持牌组纯度。'
+  };
+}
+
 function applyInitialComboBonus(state: EventGameState) {
   if (state.nextInitialCombo <= 0) {
     return;
@@ -505,27 +543,7 @@ function upgradeCardInDeck(state: EventGameState, cardId: string) {
       return card;
     }
 
-    return {
-      ...card,
-      rank: Math.min(10, card.rank + 1),
-      effects: card.effects.map((effect) => {
-        if (effect.type === 'GAIN_PROFIT') {
-          return {
-            ...effect,
-            value: roundToTwoDecimals(effect.value * 1.2)
-          };
-        }
-
-        if (effect.type === 'GAIN_PROFIT_FROM_COMBO') {
-          return {
-            ...effect,
-            profitPerCombo: roundToTwoDecimals(effect.profitPerCombo * 1.2)
-          };
-        }
-
-        return effect;
-      })
-    };
+    return upgradeCard(card);
   };
 
   state.hand = state.hand.map(upgrade);

@@ -468,7 +468,10 @@ export function resolveGameEvent(
   state: EventGameState,
   event: GameEvent
 ): GameEvent[] {
-  const resolvedEvent = applyProfitMultiplierToEvent(state, event);
+  const resolvedEvent = applyRiskMultiplierToEvent(
+    state,
+    applyProfitMultiplierToEvent(state, event)
+  );
 
   state.combo.eventLog.push(resolvedEvent.message);
   state.resolvedEventTypes.push(resolvedEvent.type);
@@ -557,8 +560,9 @@ function applyProfitMultiplierToEvent(
 
   const baseValue = event.value ?? 0;
   const turboturnMultiplier = state.turboturnMultiplier ?? 1;
+  const intentProfitMultiplier = getIntentProfitMultiplier(state, event);
   const totalMultiplier = roundToTwoDecimals(
-    state.profitMultiplier * turboturnMultiplier
+    state.profitMultiplier * turboturnMultiplier * intentProfitMultiplier
   );
 
   if (totalMultiplier === 1) {
@@ -576,9 +580,43 @@ function applyProfitMultiplierToEvent(
       baseValue,
       profitMultiplier: state.profitMultiplier,
       turboturnMultiplier,
+      intentProfitMultiplier,
       totalMultiplier
     }
   };
+}
+
+function applyRiskMultiplierToEvent(
+  state: EventGameState,
+  event: GameEvent
+): GameEvent {
+  if (event.type !== 'RISK_GAINED' || state.intentRiskMultiplier === 1) {
+    return event;
+  }
+
+  const baseValue = event.value ?? 0;
+  const value = roundToTwoDecimals(baseValue * state.intentRiskMultiplier);
+
+  return {
+    ...event,
+    value,
+    message: `${event.sourceName} 增加 ${value} 爆仓风险（基础 ${baseValue} x${state.intentRiskMultiplier.toFixed(2)}）。`,
+    meta: {
+      ...event.meta,
+      baseValue,
+      intentRiskMultiplier: state.intentRiskMultiplier
+    }
+  };
+}
+
+function getIntentProfitMultiplier(state: EventGameState, event: GameEvent) {
+  let multiplier = state.intentProfitMultiplier ?? 1;
+
+  if (event.meta?.sector && event.meta.sector === state.weakenedSector) {
+    multiplier *= 0.75;
+  }
+
+  return roundToTwoDecimals(multiplier);
 }
 
 function resolveToolTriggers(state: EventGameState, event: GameEvent): GameEvent[] {

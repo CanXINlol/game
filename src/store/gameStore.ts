@@ -8,8 +8,10 @@ import {
 import {
   applyRewardChoice,
   enterDayEndAfterReward,
+  skipReward as applySkipReward,
   startNextMarketPressure
 } from '../game/rewards';
+import { settleEncounterTurn } from '../game/encounters';
 import {
   createFormalEventGameState,
   playCard as playEventCard,
@@ -25,7 +27,9 @@ interface GameStoreState {
   eventState: EventGameState | null;
   startNewRun: () => void;
   playCard: (cardId: string) => void;
+  endTurn: () => void;
   selectReward: (rewardId: string) => void;
+  skipReward: () => void;
   continueAfterReward: () => void;
   endDayAfterReward: () => void;
   chooseDayEnd: (choice: DayChoiceId) => void;
@@ -86,6 +90,22 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       lockedProfit: nextState.lockedProfit
     });
   },
+  endTurn: () => {
+    const { eventState, gameStatus } = get();
+
+    if (!eventState || gameStatus !== 'playing') {
+      return;
+    }
+
+    const nextState = cloneEventState(eventState);
+    settleEncounterTurn(nextState);
+
+    set({
+      eventState: nextState,
+      gameStatus: nextState.phase,
+      lockedProfit: nextState.lockedProfit
+    });
+  },
   selectReward: (rewardId) => {
     const { eventState, gameStatus } = get();
 
@@ -95,6 +115,26 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
     const nextState = cloneEventState(eventState);
     const result = applyRewardChoice(nextState, rewardId);
+
+    nextState.rewardChoices = [];
+    nextState.phase = 'postReward';
+    nextState.combo.eventLog.push(result.message);
+
+    set({
+      eventState: nextState,
+      gameStatus: nextState.phase,
+      lockedProfit: nextState.lockedProfit
+    });
+  },
+  skipReward: () => {
+    const { eventState, gameStatus } = get();
+
+    if (!eventState || gameStatus !== 'reward') {
+      return;
+    }
+
+    const nextState = cloneEventState(eventState);
+    const result = applySkipReward(nextState);
 
     nextState.rewardChoices = [];
     nextState.phase = 'postReward';

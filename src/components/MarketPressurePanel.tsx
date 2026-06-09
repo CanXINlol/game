@@ -10,7 +10,7 @@ export function MarketPressurePanel(props: { pressure: MarketPressure }) {
           <p className="section-label">MarketPressure</p>
           <h2>{props.pressure.name}</h2>
         </div>
-        <span className="status-pill">{props.pressure.intent}</span>
+        <span className="status-pill">{props.pressure.intent.label}</span>
       </div>
       <p className="muted">{props.pressure.description}</p>
       <div className="hp-bar" aria-label="MarketPressure HP">

@@ -154,6 +154,7 @@ function startNextTradingDay(state: EventGameState, message: string) {
     state.seed,
     state.marketPressureIndex
   );
+  state.encounterTurn = 0;
   state.phase = 'playing';
   state.rewardChoices = [];
   state.playedCardsThisTurn = [];
@@ -161,6 +162,9 @@ function startNextTradingDay(state: EventGameState, message: string) {
   state.lastPlayedCost = null;
   state.turboturnStep = 0;
   state.turboturnMultiplier = 1;
+  state.intentProfitMultiplier = 1;
+  state.intentRiskMultiplier = 1;
+  state.weakenedSector = null;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
   state.triggeredComboMilestones = {};
@@ -181,6 +185,7 @@ function startNextMarketPressureForGreed(state: EventGameState) {
     ...createMarketPressureByIndex(state.seed, state.marketPressureIndex),
     reward: `稀有度 +${state.rewardRarityBonus} 的测试奖励`
   };
+  state.encounterTurn = 0;
   state.phase = 'playing';
   state.rewardChoices = [];
   state.ap = state.maxAp;
@@ -191,6 +196,9 @@ function startNextMarketPressureForGreed(state: EventGameState) {
   state.lastPlayedCost = null;
   state.turboturnStep = 0;
   state.turboturnMultiplier = 1;
+  state.intentProfitMultiplier = 1;
+  state.intentRiskMultiplier = 1;
+  state.weakenedSector = null;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
   state.triggeredComboMilestones = {};
