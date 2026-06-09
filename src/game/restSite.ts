@@ -24,7 +24,7 @@ export const REST_CHOICES: RestChoice[] = [
   {
     id: 'UPGRADE_CARD',
     title: '升级一张牌',
-    description: '选择一张牌，强化其效果或降低 cost。',
+    description: '选择一张牌，强化其效果或降低费用。',
     costText: '免费，但本节点结束。',
     rewardText: '升级 1 张牌',
     cashCost: 0,
@@ -35,7 +35,7 @@ export const REST_CHOICES: RestChoice[] = [
     title: '降低风险',
     description: '休息并重新评估仓位。',
     costText: '免费，但本节点结束。',
-    rewardText: 'risk -20',
+    rewardText: '风险 -20',
     cashCost: 0,
     needsCard: false
   },
@@ -43,7 +43,7 @@ export const REST_CHOICES: RestChoice[] = [
     id: 'REMOVE_CARD',
     title: '整理牌组',
     description: '支付现金删除一张牌，减少后续抽到噪音牌的概率。',
-    costText: '50 cash，本节点结束。',
+    costText: '50 现金，本节点结束。',
     rewardText: '删除 1 张牌',
     cashCost: 50,
     needsCard: true
@@ -88,7 +88,7 @@ export function applyRestChoice(
   if (choiceId === 'REDUCE_RISK') {
     state.risk = Math.max(0, Math.round((state.risk - 20) * 100) / 100);
     state.nodeActionUsed = true;
-    return { success: true, message: '休整完成：risk -20。' };
+    return { success: true, message: '休整完成：风险 -20。' };
   }
 
   const payment = spendCash(state, choice.cashCost, '休整点整理牌组');

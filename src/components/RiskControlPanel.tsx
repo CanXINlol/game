@@ -110,7 +110,7 @@ export function RiskControlPanel(props: {
               {selectedCard && needsCard ? (
                 <>
                   <span>
-                    目标：{selectedCard.name} · cost {selectedCard.cost} · 评级{' '}
+                    目标：{selectedCard.name} · 费用 {selectedCard.cost} · 评级{' '}
                     {selectedCard.rank}
                   </span>
                   <p>{getCardDescriptionLine(selectedCard.playEffect, 0)}</p>

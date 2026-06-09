@@ -1,4 +1,4 @@
-import { applyComboEvent } from './combo';
+﻿import { applyComboEvent } from './combo';
 import { getDayChoiceLabel } from './dayChoices';
 import { drawFromContinuousDeck } from './deck';
 import { gainCash } from './economy';
@@ -14,6 +14,12 @@ import {
   getRouteNode,
   isFinalBossCleared
 } from './routeMap';
+import {
+  getCashOutRatioWithTrader,
+  getTraderProfitMultiplier,
+  getTraderRiskMultiplier,
+  shouldTriggerQuantPassive
+} from './traders';
 import type { EventCardCost, EventCardRole } from './types';
 
 export interface EventCard {
@@ -388,7 +394,8 @@ export function createCardEffectEvents(
     }
 
     if (effect.type === 'CASH_OUT') {
-      const lockAmount = roundToTwoDecimals(state.combo.currentChainProfit * effect.ratio);
+      const cashOutRatio = getCashOutRatioWithTrader(state, effect.ratio);
+      const lockAmount = roundToTwoDecimals(state.combo.currentChainProfit * cashOutRatio);
 
       events.push(
         state.createEvent({
@@ -397,7 +404,7 @@ export function createCardEffectEvents(
           sourceName: card.name,
           message: `${card.name} 锁定 ${lockAmount} 浮盈。`,
           value: lockAmount,
-          meta: { ratio: effect.ratio }
+          meta: { ratio: cashOutRatio, baseRatio: effect.ratio }
         }),
         createRiskReducedEvent(state, card.id, card.name, effect.riskReduction)
       );
@@ -489,6 +496,20 @@ export function resolveGameEvent(
 
   if (resolvedEvent.type === 'CARD_DRAWN') {
     drawCardsIntoHand(state, resolvedEvent.value ?? 1);
+  }
+
+  if (shouldTriggerQuantPassive(state, resolvedEvent)) {
+    state.traderPassiveUsesThisTurn.quantFirstDrawOrCopy = 1;
+    nextEvents.push(
+      state.createEvent({
+        type: 'PROFIT_GAINED',
+        sourceId: 'trader-quant-newbie',
+        sourceName: '閲忓寲鏂颁汉',
+        message: '量化新人第一次抽牌或复制，本回合额外获得 8 收益。',
+        value: 8,
+        meta: { sector: 'TECH', traderPassive: true }
+      })
+    );
   }
 
   if (resolvedEvent.type === 'CASH_OUT') {
@@ -587,8 +608,12 @@ function applyProfitMultiplierToEvent(
   const baseValue = event.value ?? 0;
   const turboturnMultiplier = state.turboturnMultiplier ?? 1;
   const intentProfitMultiplier = getIntentProfitMultiplier(state, event);
+  const traderProfitMultiplier = getTraderProfitMultiplier(state, event);
   const totalMultiplier = roundToTwoDecimals(
-    state.profitMultiplier * turboturnMultiplier * intentProfitMultiplier
+    state.profitMultiplier *
+      turboturnMultiplier *
+      intentProfitMultiplier *
+      traderProfitMultiplier
   );
 
   if (totalMultiplier === 1) {
@@ -607,6 +632,7 @@ function applyProfitMultiplierToEvent(
       profitMultiplier: state.profitMultiplier,
       turboturnMultiplier,
       intentProfitMultiplier,
+      traderProfitMultiplier,
       totalMultiplier
     }
   };
@@ -616,21 +642,32 @@ function applyRiskMultiplierToEvent(
   state: EventGameState,
   event: GameEvent
 ): GameEvent {
-  if (event.type !== 'RISK_GAINED' || state.intentRiskMultiplier === 1) {
+  if (event.type !== 'RISK_GAINED') {
     return event;
   }
 
   const baseValue = event.value ?? 0;
-  const value = roundToTwoDecimals(baseValue * state.intentRiskMultiplier);
+  const traderRiskMultiplier = getTraderRiskMultiplier(state);
+  const totalMultiplier = roundToTwoDecimals(
+    state.intentRiskMultiplier * traderRiskMultiplier
+  );
+
+  if (totalMultiplier === 1) {
+    return event;
+  }
+
+  const value = roundToTwoDecimals(baseValue * totalMultiplier);
 
   return {
     ...event,
     value,
-    message: `${event.sourceName} 增加 ${value} 爆仓风险（基础 ${baseValue} x${state.intentRiskMultiplier.toFixed(2)}）。`,
+    message: `${event.sourceName} 增加 ${value} 爆仓风险（基础 ${baseValue} x${totalMultiplier.toFixed(2)}）。`,
     meta: {
       ...event.meta,
       baseValue,
-      intentRiskMultiplier: state.intentRiskMultiplier
+      intentRiskMultiplier: state.intentRiskMultiplier,
+      traderRiskMultiplier,
+      totalMultiplier
     }
   };
 }
@@ -741,7 +778,19 @@ function createProfitEvent(
   sector: string,
   label = '收益'
 ) {
-  return createProfitEventFromSource(state, card.id, card.name, value, sector, label);
+  return state.createEvent({
+    type: 'PROFIT_GAINED',
+    sourceId: card.id,
+    sourceName: card.name,
+    message: `${card.name} 获得 ${value} ${label}。`,
+    value,
+    meta: {
+      sector,
+      cardType: card.cardType,
+      risk: card.risk,
+      tags: card.tags ? [...card.tags] : undefined
+    }
+  });
 }
 
 function createProfitEventFromSource(
@@ -963,5 +1012,5 @@ function awardMarketPressureCash(state: EventGameState) {
             ? 80
             : 115;
 
-  gainCash(state, cashReward, '击穿奖励');
+  gainCash(state, cashReward, '鍑荤┛濂栧姳');
 }

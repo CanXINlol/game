@@ -1,37 +1,44 @@
+import { useEffect, useState } from 'react';
 import { ActionPanel } from './components/ActionPanel';
 import { CashMeter } from './components/CashMeter';
 import { ChainSummaryPanel } from './components/ChainSummaryPanel';
 import { CollapsibleEventLog } from './components/CollapsibleEventLog';
+import { CombatMarketPanel } from './components/CombatMarketPanel';
+import { CombatStatusBar } from './components/CombatStatusBar';
+import { CombatSummaryPanel } from './components/CombatSummaryPanel';
 import { CompactToolTriggerToast } from './components/CompactToolTriggerToast';
 import { DayChoicePanel } from './components/DayChoicePanel';
-import { DeckCounter } from './components/DeckCounter';
+import { DeckViewer } from './components/DeckViewer';
+import { EventHistoryViewer } from './components/EventHistoryViewer';
 import { HandArea } from './components/HandArea';
-import { IntentBanner } from './components/IntentBanner';
+import { InsuranceViewer } from './components/InsuranceViewer';
 import { MainCombatLayout } from './components/MainCombatLayout';
 import { MarketPressurePanel } from './components/MarketPressurePanel';
-import { RewardPanel } from './components/RewardPanel';
+import { ResourceRail, type ViewerKind } from './components/ResourceRail';
 import { RestPanel } from './components/RestPanel';
+import { RewardPanel } from './components/RewardPanel';
 import { RiskControlPanel } from './components/RiskControlPanel';
 import { RiskMeter } from './components/RiskMeter';
 import { RouteEventPanel } from './components/RouteEventPanel';
 import { RouteMap } from './components/RouteMap';
 import { RunStatusPanel } from './components/RunStatusPanel';
 import { ShopPanel } from './components/ShopPanel';
-import { TurnSummaryPanel } from './components/TurnSummaryPanel';
-import { ToolPanel } from './components/ToolPanel';
+import { ToolViewer } from './components/ToolViewer';
+import { TraderSelect } from './components/TraderSelect';
+import { getDayChoiceLabel } from './game/dayChoices';
 import { getEndTurnPreview } from './game/encounters';
+import { getBossInsuranceStatus, getRouteNode } from './game/routeMap';
+import { getRouteEvent } from './game/routeEvents';
+import { getRiskControlOptions } from './game/shop';
 import {
   getDayEndChoicePreviews,
   getFloatingProfit,
   useGameStore
 } from './store/gameStore';
-import { getDayChoiceLabel } from './game/dayChoices';
-import { getBossInsuranceStatus, getRouteNode } from './game/routeMap';
-import { getRouteEvent } from './game/routeEvents';
-import { getRiskControlOptions } from './game/shop';
 import './styles/app.css';
 
 export default function App() {
+  const [openViewer, setOpenViewer] = useState<ViewerKind | null>(null);
   const {
     gameStatus,
     eventState,
@@ -52,14 +59,28 @@ export default function App() {
     resetRun
   } = useGameStore();
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenViewer(null);
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'd') setOpenViewer('deck');
+      if (key === 't') setOpenViewer('tools');
+      if (key === 'i') setOpenViewer('insurance');
+      if (key === 'h') setOpenViewer('history');
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (!eventState) {
     return (
       <main className="app-shell start-screen">
-        <ActionPanel
-          gameStatus={gameStatus}
-          onStart={startNewRun}
-          onRestart={resetRun}
-        />
+        <TraderSelect onSelectTrader={startNewRun} />
       </main>
     );
   }
@@ -76,13 +97,39 @@ export default function App() {
   const currentRouteNode = eventState.routeMap.currentNodeId
     ? getRouteNode(eventState.routeMap, eventState.routeMap.currentNodeId)
     : null;
+  const bossStage =
+    currentRouteNode?.type === 'BOSS'
+      ? `第 ${eventState.routeMap.currentAct} 幕首领`
+      : null;
 
   return (
     <main className="app-shell game-screen">
+      <DeckViewer
+        open={openViewer === 'deck'}
+        state={eventState}
+        onClose={() => setOpenViewer(null)}
+      />
+      <ToolViewer
+        open={openViewer === 'tools'}
+        tools={eventState.tools}
+        onClose={() => setOpenViewer(null)}
+      />
+      <InsuranceViewer
+        open={openViewer === 'insurance'}
+        insurance={eventState.consumables}
+        onClose={() => setOpenViewer(null)}
+      />
+      <EventHistoryViewer
+        open={openViewer === 'history'}
+        eventLog={eventState.combo.eventLog}
+        runHistory={eventState.runHistory}
+        onClose={() => setOpenViewer(null)}
+      />
+
       <header className="event-top-bar">
         <div>
           <p className="eyebrow">《涨停之前》</p>
-          <h1>事件驱动连续 combo 内核</h1>
+          <h1>路线与连续出牌</h1>
         </div>
         <ActionPanel
           gameStatus={gameStatus}
@@ -92,7 +139,7 @@ export default function App() {
         />
       </header>
 
-      <section className="event-layout">
+      <section className={`event-layout ${showEncounterPanel ? 'combat-event-layout' : ''}`}>
         <div className="event-main-stack">
           {!showEncounterPanel ? (
             <RunStatusPanel
@@ -111,6 +158,7 @@ export default function App() {
               maxAp={eventState.maxAp}
             />
           ) : null}
+
           {gameStatus === 'SHOP' ? (
             <ShopPanel
               cash={eventState.cash}
@@ -156,41 +204,22 @@ export default function App() {
           ) : showEncounterPanel ? (
             <MainCombatLayout
               top={
-                <div className="combat-route-strip">
-                  <span>第 {eventState.routeMap.currentAct} 幕</span>
-                  <strong>{currentRouteNode?.title ?? '路线遭遇'}</strong>
-                  <span>第 {eventState.currentTurn} 回合</span>
-                </div>
+                <CombatStatusBar
+                  state={eventState}
+                  gameStatus={gameStatus}
+                  floatingProfit={floatingProfit}
+                  routeNode={currentRouteNode ?? null}
+                />
               }
-              left={
-                <>
-                  <CashMeter
-                    cash={eventState.cash}
-                    netCash={eventState.lastChainSummary.netCash}
-                  />
-                  <RiskMeter risk={eventState.risk} maxRisk={eventState.maxRisk} />
-                  <section className="panel compact-resource-panel">
-                    <p className="section-label">行动点</p>
-                    <strong>
-                      {eventState.ap} / {eventState.maxAp}
-                    </strong>
-                  </section>
-                  <DeckCounter
-                    handCount={eventState.hand.length}
-                    drawPileCount={eventState.drawPile.length}
-                    discardPileCount={eventState.discardPile.length}
-                  />
-                </>
-              }
+              left={<ResourceRail state={eventState} onOpenViewer={setOpenViewer} />}
               center={
                 <>
-                  <IntentBanner
+                  <CombatMarketPanel
                     pressure={eventState.marketPressure}
-                    intent={eventState.marketPressure.intent}
-                    damage={eventState.lastChainSummary.pressureDamage}
+                    bossStage={bossStage}
                   />
                   <button
-                    className="primary-action"
+                    className="primary-action end-turn-action"
                     type="button"
                     onClick={endTurn}
                     disabled={
@@ -217,20 +246,10 @@ export default function App() {
                 />
               }
               right={
-                <>
-                  <TurnSummaryPanel
-                    summary={eventState.lastChainSummary}
-                    chainDepth={eventState.combo.chainDepth}
-                    turnSummary={eventState.lastTurnSummary}
-                  />
-                  <CompactToolTriggerToast
-                    messages={eventState.lastChainSummary.keyEvents.filter((message) =>
-                      message.includes('被触发')
-                    )}
-                  />
-                  <ToolPanel tools={eventState.tools} compact />
-                  <CollapsibleEventLog eventLog={eventState.combo.eventLog} />
-                </>
+                <CombatSummaryPanel
+                  summary={eventState.lastChainSummary}
+                  chainDepth={eventState.combo.chainDepth}
+                />
               }
             />
           ) : (
@@ -240,19 +259,18 @@ export default function App() {
 
         {!showEncounterPanel ? (
           <aside className="event-side-stack">
-          <CashMeter
-            cash={eventState.cash}
-            netCash={eventState.lastChainSummary.netCash}
-          />
-          <RiskMeter risk={eventState.risk} maxRisk={eventState.maxRisk} />
-          <ChainSummaryPanel summary={eventState.lastChainSummary} />
-          <CompactToolTriggerToast
-            messages={eventState.lastChainSummary.keyEvents.filter((message) =>
-              message.includes('被触发')
-            )}
-          />
-          <ToolPanel tools={eventState.tools} compact />
-          <CollapsibleEventLog eventLog={eventState.combo.eventLog} />
+            <CashMeter
+              cash={eventState.cash}
+              netCash={eventState.lastChainSummary.netCash}
+            />
+            <RiskMeter risk={eventState.risk} maxRisk={eventState.maxRisk} />
+            <ChainSummaryPanel summary={eventState.lastChainSummary} />
+            <CompactToolTriggerToast
+              messages={eventState.lastChainSummary.keyEvents.filter((message) =>
+                message.includes('被触发')
+              )}
+            />
+            <CollapsibleEventLog eventLog={eventState.combo.eventLog} />
           </aside>
         ) : null}
       </section>

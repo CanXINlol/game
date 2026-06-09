@@ -35,7 +35,7 @@ interface GameStoreState {
   lockedProfit: number;
   gameStatus: GameStatus;
   eventState: EventGameState | null;
-  startNewRun: () => void;
+  startNewRun: (traderId?: string) => void;
   selectRouteNode: (nodeId: string) => void;
   completeRouteNode: () => void;
   playCard: (cardId: string) => void;
@@ -66,6 +66,7 @@ function cloneEventState(state: EventGameState): EventGameState {
     drawPile: [...state.drawPile],
     discardPile: [...state.discardPile],
     playedCardsThisTurn: [...state.playedCardsThisTurn],
+    removedCards: [...state.removedCards],
     combo: {
       ...state.combo,
       eventLog: [...state.combo.eventLog]
@@ -111,7 +112,8 @@ function cloneEventState(state: EventGameState): EventGameState {
         toolId,
         [...thresholds]
       ])
-    )
+    ),
+    traderPassiveUsesThisTurn: { ...state.traderPassiveUsesThisTurn }
   };
 }
 
@@ -119,11 +121,11 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   lockedProfit: 0,
   gameStatus: 'start',
   eventState: null,
-  startNewRun: () => {
+  startNewRun: (traderId = 'old-hand') => {
     const eventState = createFormalEventGameState({
       phase: 'ROUTE_SELECT',
       encounterStatus: 'ACTIVE'
-    });
+    }, traderId);
 
     set({
       lockedProfit: 0,

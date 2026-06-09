@@ -6,9 +6,12 @@ import {
   gainCash,
   getAllDeckCards,
   getCardShopPrice,
+  getInsurancePrice,
   getRemoveCardCost,
+  getReduceRiskCost,
   getShopRefreshCost,
   getToolShopPrice,
+  getUpgradeCardCost,
   isCardUpgraded,
   reduceRiskWithCash,
   removeCardFromRun,
@@ -108,7 +111,7 @@ function createServiceItems(state: EventGameState): ShopItem[] {
       serviceType: 'UPGRADE_CARD',
       title: '升级牌',
       description: '升级牌组中的第一张可升级牌。',
-      price: ECONOMY_PRICES.upgradeCard,
+      price: getUpgradeCardCost(state),
       sold: false
     },
     {
@@ -117,7 +120,7 @@ function createServiceItems(state: EventGameState): ShopItem[] {
       serviceType: 'REDUCE_RISK',
       title: '降低风险',
       description: '支付现金，风险 -15。',
-      price: ECONOMY_PRICES.reduceRisk,
+      price: getReduceRiskCost(state),
       sold: false
     }
   ];
@@ -132,7 +135,7 @@ function createInsuranceItems(state: EventGameState): ShopItem[] {
       insuranceType: 'LIQUIDATION_BUFFER',
       title: '爆仓缓冲',
       description: '本节点第一次爆仓时，risk 降到 maxRisk - 10。',
-      price: ECONOMY_PRICES.liquidationBuffer,
+      price: getInsurancePrice(state, ECONOMY_PRICES.liquidationBuffer),
       sold: false
     },
     {
@@ -141,7 +144,7 @@ function createInsuranceItems(state: EventGameState): ShopItem[] {
       insuranceType: 'PROFIT_LOCK',
       title: '收益锁',
       description: '下个节点结束时自动锁定 40% floatingProfit。',
-      price: ECONOMY_PRICES.profitLockInsurance,
+      price: getInsurancePrice(state, ECONOMY_PRICES.profitLockInsurance),
       sold: false
     },
     {
@@ -150,7 +153,7 @@ function createInsuranceItems(state: EventGameState): ShopItem[] {
       insuranceType: 'RISK_HEDGE',
       title: '风险对冲',
       description: '下个节点 risk_GAINED 降低 30%。',
-      price: ECONOMY_PRICES.riskHedgeInsurance,
+      price: getInsurancePrice(state, ECONOMY_PRICES.riskHedgeInsurance),
       sold: false
     }
   ];
@@ -216,13 +219,13 @@ export function getRiskControlOptions(state: EventGameState): RiskControlOption[
       id: 'UPGRADE_CARD',
       title: '升级牌',
       description: '升级 1 张牌，让牌面更强。',
-      price: ECONOMY_PRICES.upgradeCard
+      price: getUpgradeCardCost(state)
     },
     {
       id: 'REDUCE_RISK',
       title: '降低风险',
       description: '风险 -15。',
-      price: ECONOMY_PRICES.reduceRisk
+      price: getReduceRiskCost(state)
     },
     {
       id: 'LOCK_PROFIT',
@@ -272,7 +275,7 @@ export function applyRiskControlAction(
       return { success: false, message: '这张牌已经升级过，不能重复升级。' };
     }
 
-    const payment = spendCash(state, ECONOMY_PRICES.upgradeCard, '升级牌');
+    const payment = spendCash(state, getUpgradeCardCost(state), '升级牌');
     if (!payment.success) return payment;
 
     const result = upgradeCardInRun(state, targetCardId);
@@ -283,7 +286,7 @@ export function applyRiskControlAction(
   }
 
   if (action === 'REDUCE_RISK') {
-    const payment = spendCash(state, ECONOMY_PRICES.reduceRisk, '降低风险');
+    const payment = spendCash(state, getReduceRiskCost(state), '降低风险');
     if (!payment.success) return payment;
 
     const result = reduceRiskWithCash(state);

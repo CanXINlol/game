@@ -188,6 +188,7 @@ export function settleEncounterTurn(state: EventGameState): EventGameState {
   state.turboturnMultiplier = 1;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
+  state.traderPassiveUsesThisTurn = {};
   state.triggeredComboMilestones = {};
 
   drawOpeningHand(state);

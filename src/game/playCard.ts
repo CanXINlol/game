@@ -5,8 +5,8 @@ import {
   type EventCard,
   type EventTool
 } from './effects';
-import { FORMAL_EVENT_CARDS, FORMAL_EVENT_TOOLS } from './formalContent';
 import { getTurboturnMultiplier } from './combo';
+import { createTraderRunConfig } from './traders';
 import {
   createGameEvent,
   createInitialComboState,
@@ -54,11 +54,20 @@ export interface ConsumableInsurance {
 
 export interface EventGameState {
   seed: string;
+  traderId: string | null;
+  traderName: string | null;
+  traderTitle: string | null;
+  traderPassive: string | null;
+  traderRewardBias: string | null;
+  traderDifficulty: string | null;
+  servicePriceMultiplier: number;
+  traderPassiveUsesThisTurn: Record<string, number>;
   day: number;
   hand: EventCard[];
   drawPile: EventCard[];
   discardPile: EventCard[];
   playedCardsThisTurn: EventCard[];
+  removedCards: EventCard[];
   ap: number;
   maxAp: number;
   actionPoints: number;
@@ -140,11 +149,20 @@ export function createTestEventGameState(
   const testDrawPile = TEST_EVENT_CARDS.slice(8);
   const state: EventGameState = {
     seed: 'test-run',
+    traderId: null,
+    traderName: null,
+    traderTitle: null,
+    traderPassive: null,
+    traderRewardBias: null,
+    traderDifficulty: null,
+    servicePriceMultiplier: 1,
+    traderPassiveUsesThisTurn: {},
     day: 1,
     hand: testHand,
     drawPile: testDrawPile,
     discardPile: [],
     playedCardsThisTurn: [],
+    removedCards: [],
     ap: 6,
     maxAp: 6,
     actionPoints: 6,
@@ -235,32 +253,29 @@ export function createTestEventGameState(
 }
 
 export function createFormalEventGameState(
-  overrides: Partial<Omit<EventGameState, 'createEvent'>> = {}
+  overrides: Partial<Omit<EventGameState, 'createEvent'>> = {},
+  traderId = overrides.traderId ?? 'old-hand'
 ): EventGameState {
-  const starterDeckIds = [
-    'formal-tech-001',
-    'formal-tech-002',
-    'formal-tech-003',
-    'formal-tech-004',
-    'formal-tech-006',
-    'formal-consumer-001',
-    'formal-consumer-002',
-    'formal-consumer-003',
-    'formal-medical-001',
-    'formal-finance-001',
-    'formal-finance-005',
-    'formal-finance-006'
-  ];
-  const starterDeck = starterDeckIds
-    .map((cardId) => FORMAL_EVENT_CARDS.find((card) => card.id === cardId))
-    .filter((card): card is EventCard => Boolean(card));
+  const traderConfig = createTraderRunConfig(traderId ?? 'old-hand');
+  const maxRisk = 100 + traderConfig.maxRiskModifier;
 
   return createTestEventGameState({
     seed: 'formal-run',
-    hand: cloneCards(starterDeck.slice(0, 5)),
-    drawPile: cloneCards(starterDeck.slice(5)),
+    traderId: traderConfig.trader.id,
+    traderName: traderConfig.trader.name,
+    traderTitle: traderConfig.trader.title,
+    traderPassive: traderConfig.trader.passive,
+    traderRewardBias: traderConfig.trader.rewardBias,
+    traderDifficulty: traderConfig.trader.difficulty,
+    servicePriceMultiplier: traderConfig.servicePriceMultiplier,
+    hand: cloneCards(traderConfig.deck.slice(0, 5)),
+    drawPile: cloneCards(traderConfig.deck.slice(5)),
     discardPile: [],
-    tools: [],
+    removedCards: [],
+    tools: cloneTools(traderConfig.tools),
+    cash: traderConfig.cash,
+    maxRisk,
+    baseMaxRisk: maxRisk,
     marketPressureIndex: 0,
     encounterTurn: 0,
     ...overrides
@@ -441,6 +456,8 @@ function cloneEventGameState(state: EventGameState): EventGameState {
     drawPile: [...state.drawPile],
     discardPile: [...state.discardPile],
     playedCardsThisTurn: [...state.playedCardsThisTurn],
+    removedCards: [...state.removedCards],
+    traderPassiveUsesThisTurn: { ...state.traderPassiveUsesThisTurn },
     combo: {
       ...state.combo,
       eventLog: [...state.combo.eventLog]

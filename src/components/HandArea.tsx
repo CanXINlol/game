@@ -1,6 +1,4 @@
-import { useMemo, useState } from 'react';
-import { CardPreview } from './CardPreview';
-import type { EventCard } from '../game/effects';
+import type { CardEffect, EventCard } from '../game/effects';
 import {
   localizeCardRole,
   localizeCardType,
@@ -8,7 +6,6 @@ import {
   localizeText
 } from '../game/localization';
 import type { EventGameState } from '../game/playCard';
-import { createCardPreview } from '../game/preview';
 
 export function HandArea(props: {
   hand: EventCard[];
@@ -16,16 +13,8 @@ export function HandArea(props: {
   canPlay: boolean;
   onPlayCard: (cardId: string) => void;
 }) {
-  const [selectedCardId, setSelectedCardId] = useState(props.hand[0]?.id ?? null);
-  const selectedCard =
-    props.hand.find((card) => card.id === selectedCardId) ?? props.hand[0] ?? null;
-  const preview = useMemo(
-    () => (selectedCard ? createCardPreview(selectedCard, props.state) : null),
-    [selectedCard, props.state]
-  );
-
   return (
-    <section className="panel hand-area">
+    <section className="panel hand-area combat-hand-area">
       <div className="section-heading">
         <div>
           <p className="section-label">手牌</p>
@@ -33,45 +22,83 @@ export function HandArea(props: {
         </div>
         <span className="status-pill">{props.hand.length} 张</span>
       </div>
-      <div className="hand-with-preview">
-        <div className="event-card-grid">
-          {props.hand.map((card) => (
-            <article
+      <div className="event-card-grid combat-card-grid">
+        {props.hand.map((card) => {
+          const disabledReason = getDisabledReason(card, props.state, props.canPlay);
+
+          return (
+            <button
               key={card.id}
               data-card-id={card.id}
-              className={`event-card ${selectedCard?.id === card.id ? 'selected' : ''}`}
-              onMouseEnter={() => setSelectedCardId(card.id)}
-              onClick={() => setSelectedCardId(card.id)}
+              className={`event-card combat-card ${disabledReason ? 'disabled-card' : ''}`}
+              type="button"
+              disabled={Boolean(disabledReason)}
+              title={disabledReason ?? card.name}
+              onClick={() => props.onPlayCard(card.id)}
             >
-              <strong>{card.name}</strong>
-              <span>
-                cost {card.cost} · 角色 {localizeCardRole(card.cardRole)} · 流派{' '}
-                {card.archetype ?? (card.cardType ? localizeCardType(card.cardType) : '事件')}
+              <span className="card-topline">
+                <strong>{card.name}</strong>
+                <em>费用 {card.cost}</em>
               </span>
-              <small>
-                {localizeSector(card.sector)} · 评级 {card.rank}
-              </small>
+              <span>
+                {localizeCardRole(card.cardRole)} ·{' '}
+                {card.cardType ? localizeCardType(card.cardType) : '事件'} ·{' '}
+                {localizeSector(card.sector)}
+              </span>
+              <small>评级 {card.rank}</small>
               <p>{getCardLine(card, 0)}</p>
               <p className="card-hint">{getCardLine(card, 1)}</p>
-              <em>{getCardLine(card, 2) || getFallbackRisk(card)}</em>
-              <button
-                className="ghost-button"
-                type="button"
-                disabled={!props.canPlay || card.cost > props.state.actionPoints}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  props.onPlayCard(card.id);
-                }}
-              >
-                打出
-              </button>
-            </article>
-          ))}
-        </div>
-        <CardPreview preview={preview} />
+              <em className={disabledReason ? 'play-reason blocked' : 'play-reason'}>
+                {disabledReason ?? '可点击'}
+              </em>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
+}
+
+function getDisabledReason(card: EventCard, state: EventGameState, canPlay: boolean) {
+  if (!canPlay || state.phase !== 'PLAYER_TURN') {
+    return '阶段不可用';
+  }
+
+  if (card.cost > state.actionPoints) {
+    return 'AP 不足';
+  }
+
+  if (!areCardConditionsMet(card.effects, state)) {
+    return '条件不满足';
+  }
+
+  return null;
+}
+
+function areCardConditionsMet(effects: CardEffect[], state: EventGameState) {
+  return effects.every((effect) => {
+    if (effect.type === 'TRIGGER_LIMIT_UP_IF_PROFIT') {
+      return state.combo.currentChainProfit > 0;
+    }
+
+    if (effect.type === 'COPY_PREVIOUS_CARD') {
+      return Boolean(state.lastPlayedCard);
+    }
+
+    if (effect.type === 'REBOUND_IF_EVENT') {
+      return effect.eventTypes.some((eventType) => state.resolvedEventTypes.includes(eventType));
+    }
+
+    if (effect.type === 'DAMAGE_PRESSURE_IF_HP_BELOW') {
+      return state.marketPressure.hp / state.marketPressure.maxHp < effect.thresholdRatio;
+    }
+
+    if (effect.type === 'CASH_OUT') {
+      return state.combo.currentChainProfit > 0 || effect.riskReduction > 0;
+    }
+
+    return true;
+  });
 }
 
 function getCardLine(card: EventCard, index: number) {
@@ -81,17 +108,13 @@ function getCardLine(card: EventCard, index: number) {
     .filter(Boolean)[index] ?? '';
 }
 
-function getFallbackRisk(card: EventCard) {
-  return (card.baseRisk ?? 0) > 0 ? `风险 +${card.baseRisk}。` : '无额外风险。';
-}
-
 function describeCard(cardId: string) {
   const descriptions: Record<string, string> = {
     'test-card-tech-buy': '获得 20 收益，并触发科技板块。',
     'test-card-limit-chase': '已有收益时触发涨停，获得收益并增加连击。',
     'test-card-margin-add': '获得 40 收益，但增加 20 风险。',
     'test-card-quant-copy': '复制上一张牌的基础效果。',
-    'test-card-hot-rotation': '触发当前 hotSector，并抽 1 张牌。',
+    'test-card-hot-rotation': '触发当前热门板块，并抽 1 张牌。',
     'test-card-cash-insurance': '锁定部分浮盈，风险 -10，触发止盈。',
     'test-card-hot-stock-ignite': '触发涨停，连击 +2，风险 +15。',
     'test-card-dip-rebound': '发生过风险或亏损事件后，获得收益并风险 -5。',

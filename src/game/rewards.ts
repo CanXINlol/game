@@ -129,6 +129,7 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
   state.weakenedSector = null;
   state.resolvedEventTypes = [];
   state.toolUseCounts = {};
+  state.traderPassiveUsesThisTurn = {};
   state.triggeredComboMilestones = {};
   drawOpeningHand(state);
 

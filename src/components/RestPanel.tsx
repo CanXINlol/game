@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getAllDeckCards, isCardUpgraded } from '../game/economy';
+import { localizeText } from '../game/localization';
 import type { EventGameState } from '../game/playCard';
 import { REST_CHOICES, type RestChoiceId } from '../game/restSite';
 
@@ -49,10 +50,10 @@ export function RestPanel(props: {
               type="button"
               onClick={() => setSelectedChoice(item.id)}
             >
-              <strong>{item.title}</strong>
-              <span>{item.costText}</span>
-              <p>{item.description}</p>
-              <em>{item.rewardText}</em>
+              <strong>{localizeText(item.title)}</strong>
+              <span>{localizeText(item.costText)}</span>
+              <p>{localizeText(item.description)}</p>
+              <em>{localizeText(item.rewardText)}</em>
             </button>
           ))}
         </div>
@@ -73,7 +74,7 @@ export function RestPanel(props: {
                     onClick={() => setSelectedCardId(card.id)}
                   >
                     <strong>{card.name}</strong>
-                    <span>cost {card.cost} · 评级 {card.rank}</span>
+                    <span>费用 {card.cost} · 评级 {card.rank}</span>
                     <em>{upgraded ? '已升级' : '可选择'}</em>
                   </button>
                 );
@@ -86,10 +87,10 @@ export function RestPanel(props: {
         <div className="risk-control-column">
           <h3>确认</h3>
           <div className="risk-control-detail">
-            <strong>{choice.title}</strong>
-            <p>{choice.description}</p>
-            <p>收益：{choice.rewardText}</p>
-            <p>代价：{choice.costText}</p>
+            <strong>{localizeText(choice.title)}</strong>
+            <p>{localizeText(choice.description)}</p>
+            <p>收益：{localizeText(choice.rewardText)}</p>
+            <p>代价：{localizeText(choice.costText)}</p>
             <em>{reason}</em>
             <button
               className="primary-action"

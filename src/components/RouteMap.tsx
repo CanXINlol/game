@@ -18,7 +18,7 @@ export function RouteMap(props: {
       <div className="section-heading">
         <div>
           <p className="section-label">路线图</p>
-          <h2>目标：击败第三幕最终 Boss</h2>
+          <h2>目标：击败第三幕最终首领</h2>
         </div>
         <span className="status-pill">
           第 {props.routeMap.currentAct} 幕

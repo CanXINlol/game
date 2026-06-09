@@ -1,6 +1,7 @@
 import type { EventCard, EventTool } from './effects';
 import { aggregateChainSummary, type CashTransaction } from './feedback';
 import type { EventGameState } from './playCard';
+import { getTraderServicePriceMultiplier } from './traders';
 import { upgradeCard } from './upgrades';
 
 export const ECONOMY_PRICES = {
@@ -153,9 +154,10 @@ export function reduceRiskWithCash(state: EventGameState, amount = 15) {
 }
 
 export function getRemoveCardCost(state: EventGameState) {
-  return (
-    ECONOMY_PRICES.removeCardBase +
-    state.cardsRemovedCount * ECONOMY_PRICES.removeCardIncrease
+  return Math.round(
+    (ECONOMY_PRICES.removeCardBase +
+      state.cardsRemovedCount * ECONOMY_PRICES.removeCardIncrease) *
+      getTraderServicePriceMultiplier(state)
   );
 }
 
@@ -187,10 +189,27 @@ export function getToolShopPrice(tool: EventTool) {
 }
 
 export function getShopRefreshCost(state: EventGameState) {
-  return (
-    ECONOMY_PRICES.shopRefreshBase +
-    state.shop.refreshCount * ECONOMY_PRICES.shopRefreshIncrease
+  return Math.round(
+    (ECONOMY_PRICES.shopRefreshBase +
+      state.shop.refreshCount * ECONOMY_PRICES.shopRefreshIncrease) *
+      getTraderServicePriceMultiplier(state)
   );
+}
+
+export function getUpgradeCardCost(state: EventGameState) {
+  return Math.round(
+    ECONOMY_PRICES.upgradeCard * getTraderServicePriceMultiplier(state)
+  );
+}
+
+export function getReduceRiskCost(state: EventGameState) {
+  return Math.round(
+    ECONOMY_PRICES.reduceRisk * getTraderServicePriceMultiplier(state)
+  );
+}
+
+export function getInsurancePrice(state: EventGameState, basePrice: number) {
+  return Math.round(basePrice * getTraderServicePriceMultiplier(state));
 }
 
 export function isCardUpgraded(card: EventCard) {

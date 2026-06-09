@@ -8,8 +8,7 @@ export function ShopPanel(props: {
   onRefreshShop: () => void;
   onCompleteNode: () => void;
 }) {
-  const refreshCost =
-    25 + props.shop.refreshCount * 15;
+  const refreshCost = 25 + props.shop.refreshCount * 15;
 
   return (
     <section className="panel shop-panel">
@@ -36,14 +35,14 @@ export function ShopPanel(props: {
       />
       <ShopSection
         title="保险区"
-        description="购买一次性消耗保险。"
+        description="购买一次性保险。"
         items={props.shop.sections.insurance}
         cash={props.cash}
         onBuyItem={props.onBuyItem}
       />
       <ShopSection
         title="服务区"
-        description="删牌、升级、降风险。"
+        description="删牌、升级、降低风险。"
         items={props.shop.sections.services}
         cash={props.cash}
         onBuyItem={props.onBuyItem}
@@ -57,7 +56,7 @@ export function ShopPanel(props: {
         >
           {props.cash < refreshCost
             ? `现金不足：刷新需要 ${refreshCost}`
-            : `刷新商店（${refreshCost} 现金）`}
+            : `刷新商店：${refreshCost} 现金`}
         </button>
         <button className="primary-action" type="button" onClick={props.onCompleteNode}>
           离开商店
@@ -99,7 +98,7 @@ function ShopSection(props: {
               disabled={disabled}
               onClick={() => props.onBuyItem(item.id)}
             >
-              <strong>{item.title}</strong>
+              <strong>{localizeText(item.title)}</strong>
               <span>{item.price} 现金</span>
               <p>{localizeText(item.description)}</p>
               <em>{reason}</em>

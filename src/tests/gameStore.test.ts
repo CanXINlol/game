@@ -20,14 +20,20 @@ describe('event-driven game store', () => {
   });
 
   it('plays a card and updates hand, played cards, event log, combo, and MarketPressure', () => {
-    startFirstRouteEncounter();
+    startFirstRouteEncounter('hot-money');
     const before = useGameStore.getState().eventState;
 
     if (!before) {
       throw new Error('Expected event state.');
     }
 
-    useGameStore.getState().playCard('formal-tech-001');
+    const cardId = before.hand[0]?.id;
+
+    if (!cardId) {
+      throw new Error('Expected a card in hand.');
+    }
+
+    useGameStore.getState().playCard(cardId);
 
     const after = useGameStore.getState().eventState;
 
@@ -37,7 +43,7 @@ describe('event-driven game store', () => {
 
     expect(after.hand).toHaveLength(before.hand.length - 1);
     expect(after.playedCardsThisTurn.map((card) => card.id)).toContain(
-      'formal-tech-001'
+      cardId
     );
     expect(after.combo.eventLog.length).toBeGreaterThan(0);
     expect(after.combo.comboCount).toBeGreaterThan(0);
@@ -45,7 +51,7 @@ describe('event-driven game store', () => {
   });
 
   it('marks reward when MarketPressure is cleared through play', () => {
-    startFirstRouteEncounter();
+    startFirstRouteEncounter('hot-money');
     const eventState = useGameStore.getState().eventState;
 
     if (!eventState) {
@@ -63,7 +69,13 @@ describe('event-driven game store', () => {
         }
       }
     });
-    useGameStore.getState().playCard('formal-tech-001');
+    const clearCardId = eventState.hand[0]?.id;
+
+    if (!clearCardId) {
+      throw new Error('Expected a card in hand.');
+    }
+
+    useGameStore.getState().playCard(clearCardId);
 
     expect(useGameStore.getState().gameStatus).toBe('REWARD');
     expect(useGameStore.getState().eventState?.rewardChoices).toHaveLength(3);
@@ -73,7 +85,7 @@ describe('event-driven game store', () => {
   });
 
   it('applies selected reward and enters day-end choice', () => {
-    startFirstRouteEncounter();
+    startFirstRouteEncounter('hot-money');
     const eventState = useGameStore.getState().eventState;
 
     if (!eventState) {
@@ -91,7 +103,13 @@ describe('event-driven game store', () => {
         }
       }
     });
-    useGameStore.getState().playCard('formal-tech-001');
+    const clearCardId = eventState.hand[0]?.id;
+
+    if (!clearCardId) {
+      throw new Error('Expected a card in hand.');
+    }
+
+    useGameStore.getState().playCard(clearCardId);
 
     const rewardId = useGameStore.getState().eventState?.rewardChoices[0]?.id;
 
@@ -168,8 +186,8 @@ describe('event-driven game store', () => {
   });
 });
 
-function startFirstRouteEncounter() {
-  useGameStore.getState().startNewRun();
+function startFirstRouteEncounter(traderId = 'old-hand') {
+  useGameStore.getState().startNewRun(traderId);
   const state = useGameStore.getState().eventState;
   const nodeId = state?.routeMap.availableNodeIds[0];
 

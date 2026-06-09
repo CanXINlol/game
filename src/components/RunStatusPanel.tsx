@@ -39,7 +39,7 @@ export function RunStatusPanel(props: {
           <dd>{props.cash.toFixed(1)}</dd>
         </div>
         <div>
-          <dt>Boss 保险</dt>
+          <dt>首领保险</dt>
           <dd>{props.bossInsuranceStatus}</dd>
         </div>
         <div>

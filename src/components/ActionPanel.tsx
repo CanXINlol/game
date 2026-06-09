@@ -49,7 +49,7 @@ export function ActionPanel(props: {
     return (
       <section className="panel action-panel result-panel">
         <p className="section-label">通关</p>
-        <h2>击败第三幕最终 Boss，通关</h2>
+        <h2>击败第三幕最终首领，通关</h2>
         <p className="muted">最后一次选择：{props.lastChoiceLabel ?? '无'}。</p>
         <button className="primary-action" type="button" onClick={props.onRestart}>
           再来一局

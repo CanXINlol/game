@@ -1,3 +1,4 @@
+import { localizeText } from '../game/localization';
 import type { RouteEventDefinition } from '../game/routeEvents';
 
 export function RouteEventPanel(props: {
@@ -9,11 +10,11 @@ export function RouteEventPanel(props: {
       <div className="section-heading">
         <div>
           <p className="section-label">事件</p>
-          <h2>{props.event.title}</h2>
+          <h2>{localizeText(props.event.title)}</h2>
         </div>
         <span className="status-pill">选择后结束节点</span>
       </div>
-      <p className="route-event-description">{props.event.description}</p>
+      <p className="route-event-description">{localizeText(props.event.description)}</p>
       <div className="shop-grid">
         {props.event.choices.map((choice) => (
           <button
@@ -23,10 +24,10 @@ export function RouteEventPanel(props: {
             disabled={Boolean(choice.disabledReason)}
             onClick={() => props.onChoose(choice.id)}
           >
-            <strong>{choice.label}</strong>
-            <span>收益：{choice.rewardText}</span>
-            <p>代价：{choice.costText}</p>
-            <em>{choice.disabledReason ?? '选择后继续路线'}</em>
+            <strong>{localizeText(choice.label)}</strong>
+            <span>收益：{localizeText(choice.rewardText)}</span>
+            <p>代价：{localizeText(choice.costText)}</p>
+            <em>{choice.disabledReason ? localizeText(choice.disabledReason) : '选择后继续路线'}</em>
           </button>
         ))}
       </div>
