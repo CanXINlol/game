@@ -278,6 +278,44 @@ dd {
   margin-bottom: 12px;
 }
 
+.tools-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.tool-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(245, 240, 232, 0.1);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(245, 240, 232, 0.045);
+}
+
+.tool-item span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #18120b;
+  background: #d7b56d;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.tool-item strong {
+  color: #fff8eb;
+  font-size: 0.92rem;
+}
+
+.tool-item p {
+  margin: 0;
+  color: rgba(245, 240, 232, 0.68);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .selected-list span {
   height: fit-content;
   border: 1px solid rgba(245, 240, 232, 0.12);

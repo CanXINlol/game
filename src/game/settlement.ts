@@ -3,17 +3,20 @@ import {
   getMarketMultiplier,
   getMarketRiskModifier
 } from './market';
+import {
+  appendToolSummary,
+  applyToolEffects,
+  createInitialToolState
+} from './tools';
 import type {
   ComboResult,
   LeverageLevel,
   MarketState,
   RunState,
   SettlementResult,
-  StockCard,
-  WarningLevel
+  StockCard
 } from './types';
 
-const TOOL_MULTIPLIER = 1;
 const BASE_RISK_SCALE = 0.55;
 
 const LEVERAGE_CONFIG: Record<
@@ -33,7 +36,12 @@ export function settleTradingDay(
     Partial<
       Pick<
         RunState,
-        'maxRisk' | 'floatingProfitCarryMultiplier' | 'nextSettlementMultiplier' | 'temporaryMaxRiskPenalty'
+        | 'maxRisk'
+        | 'floatingProfitCarryMultiplier'
+        | 'nextSettlementMultiplier'
+        | 'temporaryMaxRiskPenalty'
+        | 'tools'
+        | 'toolState'
       >
     >,
   leverageLevel: LeverageLevel
@@ -53,71 +61,66 @@ export function settleTradingDay(
   const marketRiskModifier = getMarketRiskModifier(selectedCards, marketState);
   const leverageMultiplier =
     leverageConfig.multiplier * carryMultiplier * extraSettlementMultiplier;
-  const grossProfit = roundToTwoDecimals(
-    baseReturn *
-      comboMultiplier *
-      marketMultiplier *
-      TOOL_MULTIPLIER *
-      leverageMultiplier
-  );
   const riskGain = roundToTwoDecimals(
     baseRisk * BASE_RISK_SCALE * comboResult.riskModifier * marketRiskModifier +
       leverageConfig.extraRisk
   );
-  const newFloatingProfit = roundToTwoDecimals(
-    currentRunState.floatingProfit + grossProfit
-  );
-  const newRisk = roundToTwoDecimals(currentRunState.risk + riskGain);
-  const isBankrupt = newRisk >= maxRisk;
-  const warningLevel = getWarningLevel(newRisk, maxRisk);
+
+  const toolResult = applyToolEffects({
+    selectedCards,
+    comboResult,
+    marketState,
+    tools: currentRunState.tools ?? [],
+    toolState: currentRunState.toolState ?? createInitialToolState(),
+    floatingProfit: currentRunState.floatingProfit,
+    risk: currentRunState.risk,
+    maxRisk,
+    leverageLevel,
+    baseReturn,
+    baseRisk,
+    comboMultiplier,
+    marketMultiplier,
+    leverageMultiplier,
+    riskGain
+  });
 
   return {
     baseReturn,
-    comboMultiplier,
+    comboMultiplier: toolResult.comboMultiplier,
     marketMultiplier,
-    toolMultiplier: TOOL_MULTIPLIER,
+    toolMultiplier: toolResult.toolMultiplier,
     leverageMultiplier,
-    grossProfit,
-    riskGain,
-    newFloatingProfit,
-    newRisk,
-    isBankrupt,
-    warningLevel,
-    summaryText: createSummaryText({
-      baseReturn,
-      baseRisk,
-      comboResult,
-      comboMultiplier,
-      marketMultiplier,
-      marketRiskModifier,
-      leverageLevel,
-      leverageMultiplier,
-      leverageExtraRisk: leverageConfig.extraRisk,
-      grossProfit,
-      riskGain,
-      newFloatingProfit,
-      newRisk,
-      maxRisk
-    })
+    grossProfit: toolResult.grossProfit,
+    riskGain: toolResult.riskGain,
+    newFloatingProfit: toolResult.newFloatingProfit,
+    newRisk: toolResult.newRisk,
+    isBankrupt: toolResult.isBankrupt,
+    warningLevel: toolResult.warningLevel,
+    summaryText: appendToolSummary(
+      createSummaryText({
+        baseReturn,
+        baseRisk,
+        comboResult,
+        comboMultiplier: toolResult.comboMultiplier,
+        marketMultiplier,
+        marketRiskModifier,
+        toolMultiplier: toolResult.toolMultiplier,
+        leverageLevel,
+        leverageMultiplier,
+        leverageExtraRisk: leverageConfig.extraRisk,
+        grossProfit: toolResult.grossProfit,
+        riskGain: toolResult.riskGain,
+        newFloatingProfit: toolResult.newFloatingProfit,
+        newRisk: toolResult.newRisk,
+        maxRisk
+      }),
+      toolResult
+    ),
+    toolMessages: toolResult.toolMessages,
+    toolLockedProfit: toolResult.toolLockedProfit,
+    principalOverride: toolResult.principalOverride,
+    updatedToolState: toolResult.updatedToolState
   };
-}
-
-function getWarningLevel(risk: number, maxRisk: number): WarningLevel {
-  if (risk >= maxRisk) {
-    return 'BANKRUPT';
-  }
-
-  const ratio = risk / maxRisk;
-
-  if (ratio >= 0.75) {
-    return 'DANGER';
-  }
-
-  if (ratio >= 0.5) {
-    return 'CAUTION';
-  }
-
-  return 'SAFE';
 }
 
 function createSummaryText(input: {
@@ -127,6 +130,7 @@ function createSummaryText(input: {
   comboMultiplier: number;
   marketMultiplier: number;
   marketRiskModifier: number;
+  toolMultiplier: number;
   leverageLevel: LeverageLevel;
   leverageMultiplier: number;
   leverageExtraRisk: number;
@@ -140,7 +144,7 @@ function createSummaryText(input: {
     `基础收益 ${input.baseReturn}`,
     `牌型「${input.comboResult.displayName}」收益 x${input.comboMultiplier}，风险 x${input.comboResult.riskModifier}`,
     `市场收益 x${input.marketMultiplier}，市场风险 x${input.marketRiskModifier}`,
-    `工具倍率暂为 x${TOOL_MULTIPLIER}`,
+    `工具倍率 x${input.toolMultiplier}`,
     `杠杆 ${input.leverageLevel} 档收益 x${input.leverageMultiplier}，额外风险 +${input.leverageExtraRisk}`,
     `本日毛收益 ${input.grossProfit}`,
     `风险来自基础风险 ${input.baseRisk} 的结算折算、牌型、市场和杠杆，合计 +${input.riskGain}`,

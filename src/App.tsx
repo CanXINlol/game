@@ -5,7 +5,9 @@ import type {
   RiskLevel,
   RunState,
   Sector,
-  StockCard
+  StockCard,
+  Tool,
+  ToolCategory
 } from './game/types';
 import {
   getChoicePreviews,
@@ -40,6 +42,14 @@ const CHOICE_LABELS: Record<PostSettlementChoice, string> = {
   cashOut: '止盈',
   hold: '继续持有',
   leverage: '加杠杆'
+};
+
+const TOOL_CATEGORY_LABELS: Record<ToolCategory, string> = {
+  GREED: '贪婪',
+  RISK_CONTROL: '风控',
+  SECTOR: '板块',
+  LOSS_REBOUND: '亏损反弹',
+  LEVERAGE: '杠杆'
 };
 
 export default function App() {
@@ -149,6 +159,7 @@ export default function App() {
 
         <aside className="side-stack">
           <SelectedPanel cards={selectedCards} combo={settledCombo} />
+          <ToolsPanel tools={run.tools} />
           <ActionPanel
             phase={phase}
             canSettle={canSettle}
@@ -225,6 +236,29 @@ function StockCardButton(props: {
       </span>
       <span className="stock-description">{props.card.description}</span>
     </button>
+  );
+}
+
+function ToolsPanel(props: { tools: Tool[] }) {
+  return (
+    <section className="panel tools-panel">
+      <div className="section-heading">
+        <div>
+          <p className="section-label">交易工具</p>
+          <h2>已拥有工具</h2>
+        </div>
+        <span className="selection-count">{props.tools.length}</span>
+      </div>
+      <div className="tools-list">
+        {props.tools.map((tool) => (
+          <article key={tool.id} className="tool-item">
+            <span>{TOOL_CATEGORY_LABELS[tool.category]}</span>
+            <strong>{tool.name}</strong>
+            <p>{tool.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

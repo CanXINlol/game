@@ -16,6 +16,11 @@ import {
 import { evaluateCombo } from '../game/comboEvaluator';
 import { generateMarketForDay } from '../game/market';
 import { settleTradingDay } from '../game/settlement';
+import {
+  createInitialToolState,
+  createStartingTools,
+  getHoldCarryMultiplier
+} from '../game/tools';
 import type {
   ComboResult,
   LeverageLevel,
@@ -121,12 +126,17 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       floatingProfitCarryMultiplier: 1,
       nextSettlementMultiplier: 1,
       temporaryMaxRiskPenalty: 0,
+      toolState: settlement.updatedToolState,
       risk: settlement.newRisk,
       settlements: [...run.settlements, settlement],
       status: settlement.isBankrupt ? 'lost' : run.status
     };
 
     set({
+      principal: settlement.principalOverride ?? get().principal,
+      lockedProfit: roundToTwoDecimals(
+        get().lockedProfit + settlement.toolLockedProfit
+      ),
       highestFloatingProfit,
       run: nextRun,
       phase: settlement.isBankrupt ? 'bankrupt' : 'settled',
@@ -260,8 +270,9 @@ function createRun(seed: string): RunState {
   return {
     ...deckState,
     day: 1,
-    tools: [],
+    tools: createStartingTools(seed),
     market: generateMarketForDay(1, seed),
+    toolState: createInitialToolState(),
     floatingProfit: INITIAL_FLOATING_PROFIT,
     floatingProfitCarryMultiplier: 1,
     nextSettlementMultiplier: 1,
@@ -301,7 +312,10 @@ function applyPostSettlementChoice(
       lockedProfit,
       run: {
         ...run,
-        floatingProfitCarryMultiplier: HOLD_CARRY_MULTIPLIER,
+        floatingProfitCarryMultiplier: getHoldCarryMultiplier(
+          run.tools,
+          HOLD_CARRY_MULTIPLIER
+        ),
         nextSettlementMultiplier: 1,
         temporaryMaxRiskPenalty: 0,
         risk: roundToTwoDecimals(run.risk + HOLD_RISK_GAIN)
