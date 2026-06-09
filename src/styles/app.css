@@ -449,14 +449,184 @@ button:focus-visible,
   border-color: rgba(201, 70, 60, 0.45);
 }
 
+.event-top-bar {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 420px);
+  gap: 16px;
+  align-items: stretch;
+  max-width: 1480px;
+  margin: 0 auto 16px;
+}
+
+.event-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: 16px;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.event-main-stack,
+.event-side-stack {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.market-pressure-panel,
+.combo-meter,
+.event-log-panel,
+.hand-area,
+.played-cards-panel,
+.tool-panel,
+.run-status-panel {
+  padding: 16px;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  width: fit-content;
+  border: 1px solid rgba(240, 195, 106, 0.28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #f0c36a;
+  background: rgba(240, 195, 106, 0.08);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.hp-bar {
+  height: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(245, 240, 232, 0.16);
+  border-radius: 999px;
+  margin: 14px 0;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.hp-bar div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d84e45, #f0c36a);
+}
+
+.compact-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.compact-stats div {
+  min-width: 0;
+  border: 1px solid rgba(245, 240, 232, 0.1);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.event-status-bar {
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+}
+
+.combo-number {
+  margin: 6px 0 14px;
+  color: #f0c36a;
+  font-size: 4rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.event-card-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.event-card {
+  display: grid;
+  min-height: 150px;
+  gap: 8px;
+  align-content: start;
+  border: 1px solid rgba(245, 240, 232, 0.14);
+  border-radius: 8px;
+  padding: 12px;
+  color: #f5f0e8;
+  background: rgba(245, 240, 232, 0.045);
+  text-align: left;
+}
+
+.event-card:hover:not(:disabled) {
+  border-color: rgba(240, 195, 106, 0.72);
+  background: rgba(240, 195, 106, 0.12);
+}
+
+.event-card strong {
+  color: #fff8eb;
+  font-size: 1rem;
+}
+
+.event-card span {
+  color: #f0c36a;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.event-card p {
+  margin: 0;
+  color: rgba(245, 240, 232, 0.68);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.played-card-list {
+  display: flex;
+  min-height: 44px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.played-card-list span {
+  border: 1px solid rgba(245, 240, 232, 0.12);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #fff8eb;
+  background: rgba(245, 240, 232, 0.06);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.event-log-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  margin: 12px 0 0;
+  padding-left: 20px;
+  overflow: auto;
+  color: rgba(245, 240, 232, 0.76);
+  line-height: 1.45;
+}
+
+.event-log-list li::marker {
+  color: #f0c36a;
+}
+
 @media (max-width: 1120px) {
   .top-bar,
   .market-panel,
-  .board-grid {
+  .board-grid,
+  .event-top-bar,
+  .event-layout {
     grid-template-columns: 1fr;
   }
 
-  .hand-grid {
+  .hand-grid,
+  .event-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compact-stats,
+  .event-status-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -475,7 +645,10 @@ button:focus-visible,
   .market-stats,
   .settlement-grid,
   .action-row,
-  .hand-grid {
+  .hand-grid,
+  .event-card-grid,
+  .compact-stats,
+  .event-status-bar {
     grid-template-columns: 1fr;
   }
 

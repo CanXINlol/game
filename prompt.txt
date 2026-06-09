@@ -92,3 +92,37 @@ UI 能显示血条、combo、收益、风险和事件日志
 如果一张牌只是单纯加收益，它不合格。
 如果一个工具只是最终倍率 +10%，它不合格。
 如果一次出牌不能引发下一步期待，它不合格。
+
+《涨停之前》当前开发状态补丁
+
+当前项目已经完成最小事件驱动内核，不要重复重写 EventQueue。
+
+已完成：
+
+events.ts：GameEventType、GameEvent、ComboState
+eventQueue.ts：事件队列、resolveAll、maxEvents 防无限循环
+effects.ts：5 张测试牌、3 个测试工具、事件解析逻辑
+combo.ts：combo 计数、倍率、chainDepth 更新
+marketPressure.ts：可击穿市场压力血条
+playCard.ts：最小 playCard(cardId) 闭环
+eventDrivenCore.test.ts：事件队列、打牌事件、工具监听、combo、Risk、MarketPressure 测试
+
+当前验证状态：
+
+npm test 通过
+npm run build 通过
+dev server 可启动
+
+后续开发原则：
+
+不要重新设计事件系统。
+不要回到“每天抽 8、选 5、一次性结算”的旧主循环。
+不要扩 Boss、商店、元进度，直到 UI 手感验证通过。
+当前优先级是把新内核接入可玩的局内 UI。
+玩家点击一张牌后，必须立刻看到收益、风险、combo、MarketPressure 血条和工具触发变化。
+每个阶段都必须保持 npm test 和 npm run build 通过。
+如果新增系统破坏事件内核，优先修复事件内核。
+所有股票、市场、工具、新闻均为虚构娱乐内容，不接入真实行情，不提供投资建议。
+
+当前目标：
+把“打牌 → 事件 → 工具 → combo → 打穿 MarketPressure → 掉奖励”的最小闭环做成真正可玩的版本。
