@@ -94,6 +94,42 @@ export function applyMarketPressureEvent(
   return events;
 }
 
+export function applyDirectMarketPressureDamage(
+  state: EventGameState,
+  event: GameEvent
+): GameEvent[] {
+  const damage = event.value ?? 0;
+
+  if (damage <= 0 || state.marketPressure.hp <= 0) {
+    return [];
+  }
+
+  state.marketPressure = {
+    ...state.marketPressure,
+    hp: Math.max(0, roundToTwoDecimals(state.marketPressure.hp - damage))
+  };
+
+  if (state.marketPressure.hp > 0) {
+    return [];
+  }
+
+  return [
+    state.createEvent({
+      type: 'MARKET_PRESSURE_CLEARED',
+      sourceId: state.marketPressure.id,
+      sourceName: state.marketPressure.name,
+      message: `${state.marketPressure.name} 被击穿。`
+    }),
+    state.createEvent({
+      type: 'REWARD_DROPPED',
+      sourceId: state.marketPressure.id,
+      sourceName: state.marketPressure.name,
+      message: `奖励掉落：${state.marketPressure.reward}。`,
+      meta: { reward: state.marketPressure.reward }
+    })
+  ];
+}
+
 function roundToTwoDecimals(value: number) {
   return Math.round(value * 100) / 100;
 }

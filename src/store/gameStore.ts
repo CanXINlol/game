@@ -41,7 +41,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
     set({
       eventState: nextState,
-      gameStatus: nextState.phase
+      gameStatus: nextState.phase,
+      lockedProfit: nextState.lockedProfit
     });
   },
   resetRun: () => {

@@ -12,8 +12,9 @@ describe('event-driven game store', () => {
     const state = useGameStore.getState();
 
     expect(state.gameStatus).toBe('playing');
-    expect(state.eventState?.hand).toHaveLength(5);
-    expect(state.eventState?.tools).toHaveLength(3);
+    expect(state.eventState?.hand).toHaveLength(8);
+    expect(state.eventState?.drawPile).toHaveLength(2);
+    expect(state.eventState?.tools).toHaveLength(8);
   });
 
   it('plays a card and updates hand, played cards, event log, combo, and MarketPressure', () => {
@@ -32,7 +33,7 @@ describe('event-driven game store', () => {
       throw new Error('Expected event state.');
     }
 
-    expect(after.hand).toHaveLength(4);
+    expect(after.hand).toHaveLength(before.hand.length - 1);
     expect(after.playedCardsThisTurn.map((card) => card.id)).toContain(
       'test-card-tech-buy'
     );

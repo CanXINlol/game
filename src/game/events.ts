@@ -15,6 +15,9 @@ export type GameEventType =
   | 'BANKRUPTCY_WARNING'
   | 'LEVERAGE_ADDED'
   | 'CARD_COPIED'
+  | 'CARD_DRAWN'
+  | 'CASH_OUT'
+  | 'LOSS_TAKEN'
   | 'TRADE_ENDED'
   | 'EVENT_QUEUE_HALTED';
 

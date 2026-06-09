@@ -1,6 +1,9 @@
 import { applyComboEvent } from './combo';
 import type { GameEvent, GameEventType } from './events';
-import { applyMarketPressureEvent } from './marketPressure';
+import {
+  applyDirectMarketPressureDamage,
+  applyMarketPressureEvent
+} from './marketPressure';
 import type { EventGameState } from './playCard';
 
 export interface EventCard {
@@ -14,10 +17,17 @@ export interface EventCard {
 export type CardEffect =
   | { type: 'GAIN_PROFIT'; value: number; sector?: string }
   | { type: 'GAIN_RISK'; value: number }
+  | { type: 'REDUCE_RISK'; value: number }
   | { type: 'TRIGGER_SECTOR'; sector: string }
+  | { type: 'TRIGGER_HOT_SECTOR' }
+  | { type: 'TRIGGER_LIMIT_UP'; profit?: number; comboGain?: number }
   | { type: 'TRIGGER_LIMIT_UP_IF_PROFIT'; profit: number; comboGain: number }
   | { type: 'COPY_PREVIOUS_CARD' }
+  | { type: 'DRAW_CARD'; value: number }
+  | { type: 'CASH_OUT'; ratio: number; riskReduction: number }
   | { type: 'GAIN_PROFIT_FROM_COMBO'; profitPerCombo: number }
+  | { type: 'REBOUND_IF_EVENT'; eventTypes: GameEventType[]; profit: number; riskReduction: number }
+  | { type: 'DAMAGE_PRESSURE_IF_HP_BELOW'; thresholdRatio: number; damage: number }
   | { type: 'END_TRADE' };
 
 export interface EventTool {
@@ -26,17 +36,25 @@ export interface EventTool {
   description: string;
   trigger: ToolTrigger;
   effects: ToolEventEffect[];
+  limitPerDay?: number;
+  limitPerTurn?: number;
 }
 
 export interface ToolTrigger {
   type: GameEventType;
   meta?: Record<string, unknown>;
   minValue?: number;
+  comboThresholds?: number[];
 }
 
 export type ToolEventEffect =
   | { type: 'GAIN_PROFIT'; value: number; sector?: string }
-  | { type: 'GAIN_COMBO'; value: number };
+  | { type: 'GAIN_COMBO'; value: number }
+  | { type: 'GAIN_RISK'; value: number }
+  | { type: 'REDUCE_RISK'; value: number }
+  | { type: 'DRAW_CARD'; value: number }
+  | { type: 'LOCK_FLOATING_PROFIT'; ratio: number }
+  | { type: 'GAIN_PROFIT_BY_COMBO_THRESHOLD'; values: Record<number, number> };
 
 export const TEST_EVENT_CARDS: EventCard[] = [
   {
@@ -72,6 +90,54 @@ export const TEST_EVENT_CARDS: EventCard[] = [
     sector: 'TECH',
     rank: 5,
     effects: [{ type: 'COPY_PREVIOUS_CARD' }]
+  },
+  {
+    id: 'test-card-hot-rotation',
+    name: '热点轮动',
+    sector: 'CONSUMER',
+    rank: 4,
+    effects: [
+      { type: 'TRIGGER_HOT_SECTOR' },
+      { type: 'DRAW_CARD', value: 1 }
+    ]
+  },
+  {
+    id: 'test-card-cash-insurance',
+    name: '止盈保险',
+    sector: 'FINANCE',
+    rank: 2,
+    effects: [{ type: 'CASH_OUT', ratio: 0.25, riskReduction: 10 }]
+  },
+  {
+    id: 'test-card-hot-stock-ignite',
+    name: '妖股点火',
+    sector: 'ENERGY',
+    rank: 9,
+    effects: [
+      { type: 'TRIGGER_LIMIT_UP', comboGain: 2 },
+      { type: 'GAIN_RISK', value: 15 }
+    ]
+  },
+  {
+    id: 'test-card-dip-rebound',
+    name: '低吸反弹',
+    sector: 'MEDICAL',
+    rank: 4,
+    effects: [
+      {
+        type: 'REBOUND_IF_EVENT',
+        eventTypes: ['RISK_GAINED', 'LOSS_TAKEN'],
+        profit: 22,
+        riskReduction: 5
+      }
+    ]
+  },
+  {
+    id: 'test-card-short-cover',
+    name: '空头回补',
+    sector: 'FINANCE',
+    rank: 7,
+    effects: [{ type: 'DAMAGE_PRESSURE_IF_HP_BELOW', thresholdRatio: 0.5, damage: 35 }]
   },
   {
     id: 'test-card-closeout',
@@ -112,6 +178,52 @@ export const TEST_EVENT_TOOLS: EventTool[] = [
     description: '获得 10 点以上风险时，获得 12 收益。',
     trigger: { type: 'RISK_GAINED', minValue: 10 },
     effects: [{ type: 'GAIN_PROFIT', value: 12, sector: 'FINANCE' }]
+  },
+  {
+    id: 'test-tool-old-cup',
+    name: '老股民茶杯',
+    description: '触发 RISK_GAINED 时，每天最多 1 次，risk -8。',
+    trigger: { type: 'RISK_GAINED' },
+    limitPerDay: 1,
+    effects: [{ type: 'REDUCE_RISK', value: 8 }]
+  },
+  {
+    id: 'test-tool-quant-terminal',
+    name: '量化终端',
+    description: '触发 CARD_COPIED 时，抽 1 张牌，combo +1。',
+    trigger: { type: 'CARD_COPIED' },
+    effects: [
+      { type: 'DRAW_CARD', value: 1 },
+      { type: 'GAIN_COMBO', value: 1 }
+    ]
+  },
+  {
+    id: 'test-tool-cash-box',
+    name: '现金保险箱',
+    description: '触发 CASH_OUT 时，额外锁定 10% 浮盈，risk -5。',
+    trigger: { type: 'CASH_OUT' },
+    effects: [
+      { type: 'LOCK_FLOATING_PROFIT', ratio: 0.1 },
+      { type: 'REDUCE_RISK', value: 5 }
+    ]
+  },
+  {
+    id: 'test-tool-combo-display',
+    name: '连击显示器',
+    description: 'comboCount 达到 5 / 10 / 20 时，分别获得 20 / 50 / 120 收益。',
+    trigger: { type: 'COMBO_GAINED', comboThresholds: [5, 10, 20] },
+    effects: [{ type: 'GAIN_PROFIT_BY_COMBO_THRESHOLD', values: { 5: 20, 10: 50, 20: 120 } }]
+  },
+  {
+    id: 'test-tool-hot-money-seat',
+    name: '游资席位',
+    description: '触发 LIMIT_UP 时，每回合最多 3 次，获得小额收益，但 risk +5。',
+    trigger: { type: 'LIMIT_UP' },
+    limitPerTurn: 3,
+    effects: [
+      { type: 'GAIN_PROFIT', value: 6, sector: 'FINANCE' },
+      { type: 'GAIN_RISK', value: 5 }
+    ]
   }
 ];
 
@@ -124,76 +236,68 @@ export function createCardEffectEvents(
 
   for (const effect of card.effects) {
     if (effect.type === 'GAIN_PROFIT') {
-      events.push(
-        state.createEvent({
-          type: 'PROFIT_GAINED',
-          sourceId: card.id,
-          sourceName: card.name,
-          message: `${card.name} 获得 ${effect.value} 收益。`,
-          value: effect.value,
-          meta: { sector: effect.sector ?? card.sector }
-        })
-      );
+      events.push(createProfitEvent(state, card, effect.value, effect.sector ?? card.sector));
     }
 
     if (effect.type === 'GAIN_RISK') {
-      events.push(
-        state.createEvent({
-          type: 'LEVERAGE_ADDED',
-          sourceId: card.id,
-          sourceName: card.name,
-          message: `${card.name} 使用融资加仓。`,
-          meta: { sector: card.sector }
-        }),
-        state.createEvent({
-          type: 'RISK_GAINED',
-          sourceId: card.id,
-          sourceName: card.name,
-          message: `${card.name} 增加 ${effect.value} 爆仓风险。`,
-          value: effect.value
-        })
-      );
+      events.push(...createRiskGainEvents(state, card.id, card.name, effect.value, card.sector));
+    }
+
+    if (effect.type === 'REDUCE_RISK') {
+      events.push(createRiskReducedEvent(state, card.id, card.name, effect.value));
     }
 
     if (effect.type === 'TRIGGER_SECTOR') {
-      events.push(
-        state.createEvent({
-          type: 'SECTOR_TRIGGERED',
-          sourceId: card.id,
-          sourceName: card.name,
-          message: `${card.name} 触发 ${effect.sector} 板块。`,
-          meta: { sector: effect.sector }
-        })
-      );
+      events.push(createSectorEvent(state, card.id, card.name, effect.sector));
     }
 
-    if (
-      effect.type === 'TRIGGER_LIMIT_UP_IF_PROFIT' &&
-      state.combo.currentChainProfit > 0
-    ) {
+    if (effect.type === 'TRIGGER_HOT_SECTOR') {
+      events.push(createSectorEvent(state, card.id, card.name, state.hotSector));
+    }
+
+    if (effect.type === 'TRIGGER_LIMIT_UP') {
       events.push(
         state.createEvent({
           type: 'LIMIT_UP',
           sourceId: card.id,
           sourceName: card.name,
-          message: `${card.name} 追击成功，触发涨停。`
-        }),
-        state.createEvent({
-          type: 'PROFIT_GAINED',
-          sourceId: card.id,
-          sourceName: card.name,
-          message: `${card.name} 获得 ${effect.profit} 追击收益。`,
-          value: effect.profit,
+          message: `${card.name} 点火成功，触发涨停。`,
           meta: { sector: card.sector }
-        }),
-        state.createEvent({
-          type: 'COMBO_GAINED',
-          sourceId: card.id,
-          sourceName: card.name,
-          message: `${card.name} 让 combo +${effect.comboGain}。`,
-          value: effect.comboGain
         })
       );
+
+      if (effect.profit) {
+        events.push(createProfitEvent(state, card, effect.profit, card.sector));
+      }
+
+      if (effect.comboGain) {
+        events.push(createComboEvent(state, card.id, card.name, effect.comboGain));
+      }
+    }
+
+    if (effect.type === 'TRIGGER_LIMIT_UP_IF_PROFIT') {
+      if (state.combo.currentChainProfit > 0) {
+        events.push(
+          state.createEvent({
+            type: 'LIMIT_UP',
+            sourceId: card.id,
+            sourceName: card.name,
+            message: `${card.name} 追击成功，触发涨停。`,
+            meta: { sector: card.sector }
+          }),
+          createProfitEvent(state, card, effect.profit, card.sector, '追击收益'),
+          createComboEvent(state, card.id, card.name, effect.comboGain)
+        );
+      } else {
+        events.push(
+          state.createEvent({
+            type: 'LIMIT_DOWN',
+            sourceId: card.id,
+            sourceName: card.name,
+            message: `${card.name} 缺少已有收益，追击暂未触发。`
+          })
+        );
+      }
     }
 
     if (effect.type === 'COPY_PREVIOUS_CARD' && !options.copied) {
@@ -220,19 +324,77 @@ export function createCardEffectEvents(
       }
     }
 
-    if (effect.type === 'GAIN_PROFIT_FROM_COMBO') {
-      const profit = state.combo.comboCount * effect.profitPerCombo;
+    if (effect.type === 'DRAW_CARD') {
+      events.push(...createDrawEvents(state, card.id, card.name, effect.value));
+    }
+
+    if (effect.type === 'CASH_OUT') {
+      const lockAmount = roundToTwoDecimals(state.combo.currentChainProfit * effect.ratio);
 
       events.push(
         state.createEvent({
-          type: 'PROFIT_GAINED',
+          type: 'CASH_OUT',
           sourceId: card.id,
           sourceName: card.name,
-          message: `${card.name} 根据 combo 获得 ${profit} 爆发收益。`,
-          value: profit,
-          meta: { sector: card.sector }
-        })
+          message: `${card.name} 锁定 ${lockAmount} 浮盈。`,
+          value: lockAmount,
+          meta: { ratio: effect.ratio }
+        }),
+        createRiskReducedEvent(state, card.id, card.name, effect.riskReduction)
       );
+    }
+
+    if (effect.type === 'GAIN_PROFIT_FROM_COMBO') {
+      const profit = state.combo.comboCount * effect.profitPerCombo;
+      events.push(createProfitEvent(state, card, profit, card.sector, '爆发收益'));
+    }
+
+    if (effect.type === 'REBOUND_IF_EVENT') {
+      const canRebound = effect.eventTypes.some((eventType) =>
+        state.resolvedEventTypes.includes(eventType)
+      );
+
+      if (canRebound) {
+        events.push(
+          createProfitEvent(state, card, effect.profit, card.sector, '反弹收益'),
+          createRiskReducedEvent(state, card.id, card.name, effect.riskReduction)
+        );
+      } else {
+        events.push(
+          state.createEvent({
+            type: 'LOSS_TAKEN',
+            sourceId: card.id,
+            sourceName: card.name,
+            message: `${card.name} 等待风险事件，暂未反弹。`
+          })
+        );
+      }
+    }
+
+    if (effect.type === 'DAMAGE_PRESSURE_IF_HP_BELOW') {
+      const ratio = state.marketPressure.hp / state.marketPressure.maxHp;
+
+      if (ratio < effect.thresholdRatio) {
+        events.push(
+          state.createEvent({
+            type: 'MARKET_PRESSURE_DAMAGED',
+            sourceId: card.id,
+            sourceName: card.name,
+            message: `${card.name} 造成 ${effect.damage} 点空头回补伤害。`,
+            value: effect.damage,
+            meta: { directDamage: true }
+          })
+        );
+      } else {
+        events.push(
+          state.createEvent({
+            type: 'LIMIT_DOWN',
+            sourceId: card.id,
+            sourceName: card.name,
+            message: `${card.name} 等待压力低位，暂未触发回补。`
+          })
+        );
+      }
     }
 
     if (effect.type === 'END_TRADE') {
@@ -255,9 +417,18 @@ export function resolveGameEvent(
   event: GameEvent
 ): GameEvent[] {
   state.combo.eventLog.push(event.message);
+  state.resolvedEventTypes.push(event.type);
   state.combo = applyComboEvent(state.combo, event);
 
   const nextEvents: GameEvent[] = [];
+
+  if (event.type === 'CARD_DRAWN') {
+    drawCardsIntoHand(state, event.value ?? 1);
+  }
+
+  if (event.type === 'CASH_OUT') {
+    state.lockedProfit = roundToTwoDecimals(state.lockedProfit + (event.value ?? 0));
+  }
 
   if (event.type === 'RISK_GAINED') {
     state.risk = roundToTwoDecimals(state.risk + (event.value ?? 0));
@@ -283,6 +454,10 @@ export function resolveGameEvent(
     nextEvents.push(...applyMarketPressureEvent(state, event));
   }
 
+  if (event.type === 'MARKET_PRESSURE_DAMAGED' && event.meta?.directDamage) {
+    nextEvents.push(...applyDirectMarketPressureDamage(state, event));
+  }
+
   if (event.type === 'MARKET_PRESSURE_CLEARED') {
     state.phase = 'reward';
   }
@@ -304,9 +479,13 @@ function resolveToolTriggers(state: EventGameState, event: GameEvent): GameEvent
   const events: GameEvent[] = [];
 
   for (const tool of state.tools) {
-    if (!matchesToolTrigger(tool.trigger, event)) {
+    const comboThreshold = getMatchedComboThreshold(state, tool, event);
+
+    if (!matchesToolTrigger(state, tool, event, comboThreshold)) {
       continue;
     }
+
+    recordToolUse(state, tool, comboThreshold);
 
     events.push(
       state.createEvent({
@@ -314,34 +493,70 @@ function resolveToolTriggers(state: EventGameState, event: GameEvent): GameEvent
         sourceId: tool.id,
         sourceName: tool.name,
         message: `${tool.name} 被触发。`,
-        meta: { triggerEventId: event.id }
+        meta: { triggerEventId: event.id, comboThreshold }
       })
     );
 
     for (const effect of tool.effects) {
       if (effect.type === 'GAIN_PROFIT') {
         events.push(
-          state.createEvent({
-            type: 'PROFIT_GAINED',
-            sourceId: tool.id,
-            sourceName: tool.name,
-            message: `${tool.name} 获得 ${effect.value} 收益。`,
-            value: effect.value,
-            meta: { sector: effect.sector }
-          })
+          createProfitEventFromSource(
+            state,
+            tool.id,
+            tool.name,
+            effect.value,
+            effect.sector
+          )
         );
       }
 
       if (effect.type === 'GAIN_COMBO') {
+        events.push(createComboEvent(state, tool.id, tool.name, effect.value));
+      }
+
+      if (effect.type === 'GAIN_RISK') {
+        events.push(...createRiskGainEvents(state, tool.id, tool.name, effect.value));
+      }
+
+      if (effect.type === 'REDUCE_RISK') {
+        events.push(createRiskReducedEvent(state, tool.id, tool.name, effect.value));
+      }
+
+      if (effect.type === 'DRAW_CARD') {
+        events.push(...createDrawEvents(state, tool.id, tool.name, effect.value));
+      }
+
+      if (effect.type === 'LOCK_FLOATING_PROFIT') {
+        const lockAmount = roundToTwoDecimals(
+          state.combo.currentChainProfit * effect.ratio
+        );
         events.push(
           state.createEvent({
-            type: 'COMBO_GAINED',
+            type: 'CASH_OUT',
             sourceId: tool.id,
             sourceName: tool.name,
-            message: `${tool.name} 让 combo +${effect.value}。`,
-            value: effect.value
+            message: `${tool.name} 额外锁定 ${lockAmount} 浮盈。`,
+            value: lockAmount,
+            meta: { ratio: effect.ratio }
           })
         );
+      }
+
+      if (effect.type === 'GAIN_PROFIT_BY_COMBO_THRESHOLD' && comboThreshold) {
+        const value = effect.values[comboThreshold] ?? 0;
+
+        if (value > 0) {
+          events.push(
+            createProfitEventFromSource(
+              state,
+              tool.id,
+              tool.name,
+              value,
+              'TECH',
+              `${comboThreshold} 连击奖励`
+            )
+          );
+        }
       }
     }
   }
@@ -349,12 +564,162 @@ function resolveToolTriggers(state: EventGameState, event: GameEvent): GameEvent
   return events;
 }
 
-function matchesToolTrigger(trigger: ToolTrigger, event: GameEvent) {
+function createProfitEvent(
+  state: EventGameState,
+  card: EventCard,
+  value: number,
+  sector: string,
+  label = '收益'
+) {
+  return createProfitEventFromSource(state, card.id, card.name, value, sector, label);
+}
+
+function createProfitEventFromSource(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  value: number,
+  sector?: string,
+  label = '收益'
+) {
+  return state.createEvent({
+    type: 'PROFIT_GAINED',
+    sourceId,
+    sourceName,
+    message: `${sourceName} 获得 ${value} ${label}。`,
+    value,
+    meta: { sector }
+  });
+}
+
+function createRiskGainEvents(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  value: number,
+  sector?: string
+) {
+  return [
+    state.createEvent({
+      type: 'LEVERAGE_ADDED',
+      sourceId,
+      sourceName,
+      message: `${sourceName} 增加风险敞口。`,
+      meta: { sector }
+    }),
+    state.createEvent({
+      type: 'RISK_GAINED',
+      sourceId,
+      sourceName,
+      message: `${sourceName} 增加 ${value} 爆仓风险。`,
+      value
+    })
+  ];
+}
+
+function createRiskReducedEvent(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  value: number
+) {
+  return state.createEvent({
+    type: 'RISK_REDUCED',
+    sourceId,
+    sourceName,
+    message: `${sourceName} 降低 ${value} 爆仓风险。`,
+    value
+  });
+}
+
+function createSectorEvent(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  sector: string
+) {
+  return state.createEvent({
+    type: 'SECTOR_TRIGGERED',
+    sourceId,
+    sourceName,
+    message: `${sourceName} 触发 ${sector} 板块。`,
+    meta: { sector }
+  });
+}
+
+function createComboEvent(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  value: number
+) {
+  return state.createEvent({
+    type: 'COMBO_GAINED',
+    sourceId,
+    sourceName,
+    message: `${sourceName} 让 combo +${value}。`,
+    value
+  });
+}
+
+function createDrawEvents(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  count: number
+) {
+  return Array.from({ length: count }, () =>
+    state.createEvent({
+      type: 'CARD_DRAWN',
+      sourceId,
+      sourceName,
+      message: `${sourceName} 抽 1 张测试牌。`,
+      value: 1
+    })
+  );
+}
+
+function drawCardsIntoHand(state: EventGameState, count: number) {
+  for (let index = 0; index < count; index += 1) {
+    const drawnCard = state.drawPile.shift();
+
+    if (!drawnCard) {
+      return;
+    }
+
+    state.hand.push(drawnCard);
+  }
+}
+
+function matchesToolTrigger(
+  state: EventGameState,
+  tool: EventTool,
+  event: GameEvent,
+  comboThreshold: number | null
+) {
+  const trigger = tool.trigger;
+
   if (trigger.type !== event.type) {
     return false;
   }
 
+  if (event.sourceId === tool.id) {
+    return false;
+  }
+
   if (trigger.minValue !== undefined && (event.value ?? 0) < trigger.minValue) {
+    return false;
+  }
+
+  if (trigger.comboThresholds && comboThreshold === null) {
+    return false;
+  }
+
+  if (tool.limitPerDay !== undefined && getToolUseCount(state, tool) >= tool.limitPerDay) {
+    return false;
+  }
+
+  if (tool.limitPerTurn !== undefined && getToolUseCount(state, tool) >= tool.limitPerTurn) {
     return false;
   }
 
@@ -365,6 +730,45 @@ function matchesToolTrigger(trigger: ToolTrigger, event: GameEvent) {
   }
 
   return true;
+}
+
+function getMatchedComboThreshold(
+  state: EventGameState,
+  tool: EventTool,
+  event: GameEvent
+) {
+  const thresholds = tool.trigger.comboThresholds;
+
+  if (!thresholds || event.type !== 'COMBO_GAINED') {
+    return null;
+  }
+
+  const triggered = state.triggeredComboMilestones[tool.id] ?? [];
+
+  return (
+    thresholds.find((threshold) => {
+      return state.combo.comboCount >= threshold && !triggered.includes(threshold);
+    }) ?? null
+  );
+}
+
+function recordToolUse(
+  state: EventGameState,
+  tool: EventTool,
+  comboThreshold: number | null
+) {
+  state.toolUseCounts[tool.id] = getToolUseCount(state, tool) + 1;
+
+  if (comboThreshold !== null) {
+    state.triggeredComboMilestones[tool.id] = [
+      ...(state.triggeredComboMilestones[tool.id] ?? []),
+      comboThreshold
+    ];
+  }
+}
+
+function getToolUseCount(state: EventGameState, tool: EventTool) {
+  return state.toolUseCounts[tool.id] ?? 0;
 }
 
 function roundToTwoDecimals(value: number) {

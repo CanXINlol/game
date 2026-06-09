@@ -22,16 +22,22 @@ export type EventGamePhase = 'playing' | 'dayEnd' | 'reward' | 'bankrupt';
 
 export interface EventGameState {
   hand: EventCard[];
+  drawPile: EventCard[];
   playedCardsThisTurn: EventCard[];
   ap: number;
   maxAp: number;
   risk: number;
   maxRisk: number;
+  lockedProfit: number;
+  hotSector: string;
   combo: ComboState;
   marketPressure: MarketPressure;
   tools: EventTool[];
   phase: EventGamePhase;
   lastPlayedCard: EventCard | null;
+  resolvedEventTypes: GameEventType[];
+  toolUseCounts: Record<string, number>;
+  triggeredComboMilestones: Record<string, number[]>;
   nextEventSeq: number;
   createEvent(input: {
     type: GameEventType;
@@ -47,18 +53,26 @@ export interface EventGameState {
 export function createTestEventGameState(
   overrides: Partial<Omit<EventGameState, 'createEvent'>> = {}
 ): EventGameState {
+  const testHand = TEST_EVENT_CARDS.slice(0, 8);
+  const testDrawPile = TEST_EVENT_CARDS.slice(8);
   const state: EventGameState = {
-    hand: [...TEST_EVENT_CARDS],
+    hand: testHand,
+    drawPile: testDrawPile,
     playedCardsThisTurn: [],
-    ap: 5,
-    maxAp: 5,
+    ap: 6,
+    maxAp: 6,
     risk: 0,
     maxRisk: 100,
+    lockedProfit: 0,
+    hotSector: 'TECH',
     combo: createInitialComboState(),
     marketPressure: createTestMarketPressure(),
     tools: [...TEST_EVENT_TOOLS],
     phase: 'playing',
     lastPlayedCard: null,
+    resolvedEventTypes: [],
+    toolUseCounts: {},
+    triggeredComboMilestones: {},
     nextEventSeq: 0,
     createEvent(input) {
       this.nextEventSeq += 1;
@@ -115,12 +129,21 @@ function cloneEventGameState(state: EventGameState): EventGameState {
   return {
     ...state,
     hand: [...state.hand],
+    drawPile: [...state.drawPile],
     playedCardsThisTurn: [...state.playedCardsThisTurn],
     combo: {
       ...state.combo,
       eventLog: [...state.combo.eventLog]
     },
     marketPressure: { ...state.marketPressure },
-    tools: [...state.tools]
+    tools: [...state.tools],
+    resolvedEventTypes: [...state.resolvedEventTypes],
+    toolUseCounts: { ...state.toolUseCounts },
+    triggeredComboMilestones: Object.fromEntries(
+      Object.entries(state.triggeredComboMilestones).map(([toolId, thresholds]) => [
+        toolId,
+        [...thresholds]
+      ])
+    )
   };
 }
