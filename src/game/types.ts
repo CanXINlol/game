@@ -1,12 +1,9 @@
 export type Sector =
-  | 'technology'
-  | 'consumer'
-  | 'healthcare'
-  | 'energy'
-  | 'finance'
-  | 'manufacturing'
-  | 'infrastructure'
-  | 'defense';
+  | 'TECH'
+  | 'CONSUMER'
+  | 'MEDICAL'
+  | 'ENERGY'
+  | 'FINANCE';
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'extreme';
 
@@ -25,9 +22,12 @@ export interface StockCard {
   id: string;
   name: string;
   sector: Sector;
+  rank: number;
+  risk: RiskLevel;
   tags: StockTag[];
-  riskLevel: RiskLevel;
-  basePower: number;
+  baseReturn: number;
+  baseRisk: number;
+  description: string;
 }
 
 export interface Tool {
