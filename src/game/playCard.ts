@@ -17,10 +17,12 @@ import {
   createTestMarketPressure,
   type MarketPressure
 } from './marketPressure';
+import { type RewardOption } from './rewards';
 
-export type EventGamePhase = 'playing' | 'dayEnd' | 'reward' | 'bankrupt';
+export type EventGamePhase = 'playing' | 'dayEnd' | 'reward' | 'postReward' | 'bankrupt';
 
 export interface EventGameState {
+  seed: string;
   hand: EventCard[];
   drawPile: EventCard[];
   playedCardsThisTurn: EventCard[];
@@ -32,8 +34,12 @@ export interface EventGameState {
   hotSector: string;
   combo: ComboState;
   marketPressure: MarketPressure;
+  marketPressureIndex: number;
   tools: EventTool[];
   phase: EventGamePhase;
+  rewardChoices: RewardOption[];
+  rewardsTakenCount: number;
+  nextInitialCombo: number;
   lastPlayedCard: EventCard | null;
   resolvedEventTypes: GameEventType[];
   toolUseCounts: Record<string, number>;
@@ -56,6 +62,7 @@ export function createTestEventGameState(
   const testHand = TEST_EVENT_CARDS.slice(0, 8);
   const testDrawPile = TEST_EVENT_CARDS.slice(8);
   const state: EventGameState = {
+    seed: 'test-run',
     hand: testHand,
     drawPile: testDrawPile,
     playedCardsThisTurn: [],
@@ -67,8 +74,12 @@ export function createTestEventGameState(
     hotSector: 'TECH',
     combo: createInitialComboState(),
     marketPressure: createTestMarketPressure(),
+    marketPressureIndex: 0,
     tools: [...TEST_EVENT_TOOLS],
     phase: 'playing',
+    rewardChoices: [] as RewardOption[],
+    rewardsTakenCount: 0,
+    nextInitialCombo: 0,
     lastPlayedCard: null,
     resolvedEventTypes: [],
     toolUseCounts: {},
@@ -137,6 +148,7 @@ function cloneEventGameState(state: EventGameState): EventGameState {
     },
     marketPressure: { ...state.marketPressure },
     tools: [...state.tools],
+    rewardChoices: [...state.rewardChoices],
     resolvedEventTypes: [...state.resolvedEventTypes],
     toolUseCounts: { ...state.toolUseCounts },
     triggeredComboMilestones: Object.fromEntries(

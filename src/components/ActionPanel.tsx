@@ -18,13 +18,13 @@ export function ActionPanel(props: {
     );
   }
 
-  if (props.gameStatus === 'reward') {
+  if (props.gameStatus === 'reward' || props.gameStatus === 'postReward') {
     return (
       <section className="panel action-panel result-panel">
         <p className="section-label">Reward</p>
-        <h2>市场压力已击穿 / 奖励掉落</h2>
-        <p className="muted">最小闭环已完成：打牌、触发、连锁、击穿。</p>
-        <button className="primary-action" type="button" onClick={props.onRestart}>
+        <h2>奖励阶段</h2>
+        <p className="muted">请在主区域选择奖励，并决定下一压力盘或日终。</p>
+        <button className="ghost-button" type="button" onClick={props.onRestart}>
           重新开始
         </button>
       </section>

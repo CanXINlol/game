@@ -4,6 +4,7 @@ import { EventLogPanel } from './components/EventLogPanel';
 import { HandArea } from './components/HandArea';
 import { MarketPressurePanel } from './components/MarketPressurePanel';
 import { PlayedCardsPanel } from './components/PlayedCardsPanel';
+import { RewardPanel } from './components/RewardPanel';
 import { RunStatusPanel } from './components/RunStatusPanel';
 import { ToolPanel } from './components/ToolPanel';
 import { getFloatingProfit, useGameStore } from './store/gameStore';
@@ -16,6 +17,9 @@ export default function App() {
     lockedProfit,
     startNewRun,
     playCard,
+    selectReward,
+    continueAfterReward,
+    endDayAfterReward,
     resetRun
   } = useGameStore();
 
@@ -32,6 +36,7 @@ export default function App() {
   }
 
   const floatingProfit = getFloatingProfit(eventState);
+  const showRewardPanel = gameStatus === 'reward' || gameStatus === 'postReward';
 
   return (
     <main className="app-shell game-screen">
@@ -58,13 +63,25 @@ export default function App() {
             ap={eventState.ap}
             maxAp={eventState.maxAp}
           />
-          <MarketPressurePanel pressure={eventState.marketPressure} />
-          <HandArea
-            hand={eventState.hand}
-            canPlay={gameStatus === 'playing'}
-            onPlayCard={playCard}
-          />
-          <PlayedCardsPanel cards={eventState.playedCardsThisTurn} />
+          {showRewardPanel ? (
+            <RewardPanel
+              phase={gameStatus === 'postReward' ? 'postReward' : 'reward'}
+              choices={eventState.rewardChoices}
+              onSelectReward={selectReward}
+              onContinueTrading={continueAfterReward}
+              onEndDay={endDayAfterReward}
+            />
+          ) : (
+            <>
+              <MarketPressurePanel pressure={eventState.marketPressure} />
+              <HandArea
+                hand={eventState.hand}
+                canPlay={gameStatus === 'playing'}
+                onPlayCard={playCard}
+              />
+              <PlayedCardsPanel cards={eventState.playedCardsThisTurn} />
+            </>
+          )}
         </div>
 
         <aside className="event-side-stack">

@@ -130,6 +130,7 @@ describe('event-driven core', () => {
 
     expect(nextState.marketPressure.hp).toBe(0);
     expect(nextState.phase).toBe('reward');
+    expect(nextState.rewardChoices).toHaveLength(3);
     expect(log).toContain('被击穿');
     expect(log).toContain('奖励掉落');
   });

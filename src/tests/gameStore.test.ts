@@ -63,9 +63,44 @@ describe('event-driven game store', () => {
     useGameStore.getState().playCard('test-card-tech-buy');
 
     expect(useGameStore.getState().gameStatus).toBe('reward');
+    expect(useGameStore.getState().eventState?.rewardChoices).toHaveLength(3);
     expect(
       useGameStore.getState().eventState?.combo.eventLog.join('\n')
     ).toContain('奖励掉落');
+  });
+
+  it('applies selected reward and can continue to the next pressure', () => {
+    useGameStore.getState().startNewRun();
+    const eventState = useGameStore.getState().eventState;
+
+    if (!eventState) {
+      throw new Error('Expected event state.');
+    }
+
+    useGameStore.setState({
+      eventState: {
+        ...eventState,
+        marketPressure: {
+          ...eventState.marketPressure,
+          hp: 10,
+          maxHp: 10
+        }
+      }
+    });
+    useGameStore.getState().playCard('test-card-tech-buy');
+
+    const rewardId = useGameStore.getState().eventState?.rewardChoices[0]?.id;
+
+    if (!rewardId) {
+      throw new Error('Expected reward choices.');
+    }
+
+    useGameStore.getState().selectReward(rewardId);
+    expect(useGameStore.getState().gameStatus).toBe('postReward');
+
+    useGameStore.getState().continueAfterReward();
+    expect(useGameStore.getState().gameStatus).toBe('playing');
+    expect(useGameStore.getState().eventState?.marketPressureIndex).toBe(1);
   });
 
   it('marks bankrupt when risk reaches maxRisk through play', () => {

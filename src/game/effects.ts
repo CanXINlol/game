@@ -5,6 +5,7 @@ import {
   applyMarketPressureEvent
 } from './marketPressure';
 import type { EventGameState } from './playCard';
+import { generateRewardChoices } from './rewards';
 
 export interface EventCard {
   id: string;
@@ -460,6 +461,10 @@ export function resolveGameEvent(
 
   if (event.type === 'MARKET_PRESSURE_CLEARED') {
     state.phase = 'reward';
+  }
+
+  if (event.type === 'REWARD_DROPPED') {
+    state.rewardChoices = generateRewardChoices(state);
   }
 
   if (event.type === 'BANKRUPTCY_WARNING') {

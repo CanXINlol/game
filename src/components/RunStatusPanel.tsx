@@ -47,7 +47,8 @@ function formatStatus(status: GameStatus) {
     start: '等待开局',
     playing: '连续打牌中',
     dayEnd: '交易结束',
-    reward: '市场压力已击穿 / 奖励掉落',
+    reward: '选择奖励',
+    postReward: '奖励已领取，等待下一步',
     bankrupt: '爆仓'
   };
 

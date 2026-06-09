@@ -14,18 +14,53 @@ export interface MarketPressure {
   reward: string;
 }
 
-export function createTestMarketPressure(): MarketPressure {
-  return {
+export const MARKET_PRESSURE_DEFINITIONS: Omit<MarketPressure, 'hp'>[] = [
+  {
     id: 'pressure-tech-rumor',
     name: '题材分歧盘',
     description: '一段虚构市场压力，正在考验玩家能不能连续打出收益事件。',
-    hp: 120,
     maxHp: 120,
     shield: 0,
     weaknessSector: 'TECH',
     resistanceSector: 'FINANCE',
     intent: '下回合可能提高风险',
-    reward: '掉落一个测试奖励'
+    reward: 'combo 向奖励'
+  },
+  {
+    id: 'pressure-consumer-pullback',
+    name: '消费回撤盘',
+    description: '消费板块退潮，需要热点轮动和板块连锁才能击穿。',
+    maxHp: 100,
+    shield: 10,
+    weaknessSector: 'CONSUMER',
+    resistanceSector: 'MEDICAL',
+    intent: '提高 shield，鼓励多段 combo',
+    reward: 'combo 向奖励'
+  },
+  {
+    id: 'pressure-finance-squeeze',
+    name: '金融挤压盘',
+    description: '杠杆收益高，但风险事件会更频繁地打断 combo。',
+    maxHp: 140,
+    shield: 0,
+    weaknessSector: 'FINANCE',
+    resistanceSector: 'ENERGY',
+    intent: '放大风险收益博弈',
+    reward: 'combo 向奖励'
+  }
+];
+
+export function createTestMarketPressure(): MarketPressure {
+  return createMarketPressureByIndex('test-run', 0);
+}
+
+export function createMarketPressureByIndex(_seed: string, index: number): MarketPressure {
+  const definition =
+    MARKET_PRESSURE_DEFINITIONS[index % MARKET_PRESSURE_DEFINITIONS.length];
+
+  return {
+    ...definition,
+    hp: definition.maxHp
   };
 }
 
