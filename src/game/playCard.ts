@@ -14,15 +14,43 @@ import {
   type GameEvent,
   type GameEventType
 } from './events';
+import {
+  aggregateChainSummary,
+  type CashTransaction,
+  type ChainSummary
+} from './feedback';
 import { EventQueue } from './eventQueue';
 import {
   createTestMarketPressure,
   type MarketPressure
 } from './marketPressure';
 import { type RewardOption } from './rewards';
+import { createRouteMap, type RouteMapState } from './routeMap';
+import type { ShopState } from './shop';
 import type { EventCardCost } from './types';
 
-export type EventGamePhase = 'playing' | 'dayEnd' | 'reward' | 'postReward' | 'bankrupt';
+export type GamePhase =
+  | 'ROUTE_SELECT'
+  | 'ENCOUNTER_START'
+  | 'PLAYER_TURN'
+  | 'RESOLVING_QUEUE'
+  | 'ENEMY_INTENT'
+  | 'REWARD'
+  | 'SHOP'
+  | 'REST'
+  | 'DAY_END'
+  | 'RUN_WON'
+  | 'RUN_LOST';
+
+export type EventGamePhase = GamePhase;
+
+export type EncounterStatus = 'ACTIVE' | 'CLEARED' | 'LOST';
+
+export interface ConsumableInsurance {
+  id: string;
+  name: string;
+  description: string;
+}
 
 export interface EventGameState {
   seed: string;
@@ -43,13 +71,31 @@ export interface EventGameState {
   nextProfitMultiplier: number;
   nextApBonus: number;
   nextMaxRiskPenalty: number;
+  cash: number;
   lockedProfit: number;
+  cardsPurchasedCount: number;
+  toolsPurchasedCount: number;
+  cardsRemovedCount: number;
+  shopVisitCount: number;
+  nodeActionUsed: boolean;
+  shopRefreshUsed: boolean;
+  hasBossInsurance: boolean;
+  bossInsuranceUsed: boolean;
+  consumables: ConsumableInsurance[];
   hotSector: string;
   combo: ComboState;
   marketPressure: MarketPressure;
   marketPressureIndex: number;
   tools: EventTool[];
   phase: EventGamePhase;
+  currentTurn: number;
+  intentResolvedThisTurn: boolean;
+  currentIntentId: string;
+  lastResolvedIntentId: string | null;
+  canResolveIntent: boolean;
+  encounterStatus: EncounterStatus;
+  routeMap: RouteMapState;
+  shop: ShopState;
   rewardChoices: RewardOption[];
   rewardsTakenCount: number;
   rewardRarityBonus: number;
@@ -67,7 +113,12 @@ export interface EventGameState {
   runHistory: string[];
   lastDayChoice: string | null;
   lastPlayedCard: EventCard | null;
+  lastTurnSummary: string | null;
   resolvedEventTypes: GameEventType[];
+  resolvedEventsThisAction: GameEvent[];
+  cashTransactions: CashTransaction[];
+  cashTransactionsThisAction: CashTransaction[];
+  lastChainSummary: ChainSummary;
   toolUseCounts: Record<string, number>;
   triggeredComboMilestones: Record<string, number[]>;
   nextEventSeq: number;
@@ -106,13 +157,36 @@ export function createTestEventGameState(
     nextProfitMultiplier: 1,
     nextApBonus: 0,
     nextMaxRiskPenalty: 0,
+    cash: 120,
     lockedProfit: 0,
+    cardsPurchasedCount: 0,
+    toolsPurchasedCount: 0,
+    cardsRemovedCount: 0,
+    shopVisitCount: 0,
+    nodeActionUsed: false,
+    shopRefreshUsed: false,
+    hasBossInsurance: false,
+    bossInsuranceUsed: false,
+    consumables: [],
     hotSector: 'TECH',
     combo: createInitialComboState(),
     marketPressure: createTestMarketPressure(),
     marketPressureIndex: 0,
     tools: [...TEST_EVENT_TOOLS],
-    phase: 'playing',
+    phase: 'PLAYER_TURN',
+    currentTurn: 1,
+    intentResolvedThisTurn: false,
+    currentIntentId: createTestMarketPressure().intent.id,
+    lastResolvedIntentId: null,
+    canResolveIntent: false,
+    encounterStatus: 'ACTIVE',
+    routeMap: createRouteMap('test-run'),
+    shop: {
+      id: 'empty-shop',
+      sections: { cards: [], tools: [], insurance: [], services: [] },
+      items: [],
+      refreshCount: 0
+    },
     rewardChoices: [] as RewardOption[],
     rewardsTakenCount: 0,
     rewardRarityBonus: 0,
@@ -130,7 +204,12 @@ export function createTestEventGameState(
     runHistory: [],
     lastDayChoice: null,
     lastPlayedCard: null,
+    lastTurnSummary: null,
     resolvedEventTypes: [],
+    resolvedEventsThisAction: [],
+    cashTransactions: [],
+    cashTransactionsThisAction: [],
+    lastChainSummary: aggregateChainSummary([]),
     toolUseCounts: {},
     triggeredComboMilestones: {},
     nextEventSeq: 0,
@@ -144,35 +223,44 @@ export function createTestEventGameState(
     ...overrides
   };
 
+  if (overrides.currentIntentId === undefined) {
+    state.currentIntentId = state.marketPressure.intent.id;
+  }
+
+  if (overrides.routeMap === undefined) {
+    state.routeMap = createRouteMap(state.seed);
+  }
+
   return state;
 }
 
 export function createFormalEventGameState(
   overrides: Partial<Omit<EventGameState, 'createEvent'>> = {}
 ): EventGameState {
-  const openingHandIds = [
-    'formal-tech-002',
+  const starterDeckIds = [
     'formal-tech-001',
+    'formal-tech-002',
     'formal-tech-003',
-    'formal-finance-006',
-    'formal-tech-005',
     'formal-tech-004',
     'formal-tech-006',
-    'formal-consumer-001'
+    'formal-consumer-001',
+    'formal-consumer-002',
+    'formal-consumer-003',
+    'formal-medical-001',
+    'formal-finance-001',
+    'formal-finance-005',
+    'formal-finance-006'
   ];
-  const openingHand = openingHandIds
+  const starterDeck = starterDeckIds
     .map((cardId) => FORMAL_EVENT_CARDS.find((card) => card.id === cardId))
     .filter((card): card is EventCard => Boolean(card));
-  const openingHandIdSet = new Set(openingHandIds);
 
   return createTestEventGameState({
     seed: 'formal-run',
-    hand: cloneCards(openingHand),
-    drawPile: cloneCards(
-      FORMAL_EVENT_CARDS.filter((card) => !openingHandIdSet.has(card.id))
-    ),
+    hand: cloneCards(starterDeck.slice(0, 5)),
+    drawPile: cloneCards(starterDeck.slice(5)),
     discardPile: [],
-    tools: cloneTools(FORMAL_EVENT_TOOLS),
+    tools: [],
     marketPressureIndex: 0,
     encounterTurn: 0,
     ...overrides
@@ -180,7 +268,7 @@ export function createFormalEventGameState(
 }
 
 export function playCard(state: EventGameState, cardId: string): EventGameState {
-  if (state.phase !== 'playing') {
+  if (state.phase !== 'PLAYER_TURN') {
     return state;
   }
 
@@ -191,6 +279,8 @@ export function playCard(state: EventGameState, cardId: string): EventGameState 
   }
 
   const nextState = cloneEventGameState(state);
+  nextState.resolvedEventsThisAction = [];
+  nextState.cashTransactionsThisAction = [];
   const previousCard = nextState.lastPlayedCard;
   nextState.hand = nextState.hand.filter((item) => item.id !== cardId);
   nextState.playedCardsThisTurn = [...nextState.playedCardsThisTurn, card];
@@ -198,6 +288,7 @@ export function playCard(state: EventGameState, cardId: string): EventGameState 
   nextState.ap = nextState.actionPoints;
 
   const queue = new EventQueue();
+  nextState.phase = 'RESOLVING_QUEUE';
   queue.enqueue(
     nextState.createEvent({
       type: 'CARD_PLAYED',
@@ -222,6 +313,13 @@ export function playCard(state: EventGameState, cardId: string): EventGameState 
   }
 
   queue.resolveAll(nextState);
+  nextState.lastChainSummary = aggregateChainSummary(
+    nextState.resolvedEventsThisAction,
+    nextState.cashTransactionsThisAction
+  );
+  if (nextState.phase === 'RESOLVING_QUEUE') {
+    nextState.phase = 'PLAYER_TURN';
+  }
   nextState.lastPlayedCard = card;
   endTradeIfNoPlayableCards(nextState);
 
@@ -296,7 +394,7 @@ function createTurboturnEvents(
 }
 
 function endTradeIfNoPlayableCards(state: EventGameState) {
-  if (state.phase !== 'playing') {
+  if (state.phase !== 'PLAYER_TURN') {
     return;
   }
 
@@ -306,9 +404,11 @@ function endTradeIfNoPlayableCards(state: EventGameState) {
     return;
   }
 
-  state.phase = 'dayEnd';
-  state.combo.eventLog.push('收盘整理：没有可打出的牌，自动结束当前交易。');
-  state.runHistory.push('收盘整理：没有可打出的牌，结束交易。');
+  state.phase = 'ENEMY_INTENT';
+  state.canResolveIntent = true;
+  state.intentResolvedThisTurn = false;
+  state.combo.eventLog.push('没有可打出的牌，进入敌方意图结算。');
+  state.runHistory.push('没有可打出的牌，进入敌方意图结算。');
 }
 
 function cloneCards(cards: EventCard[]): EventCard[] {
@@ -346,10 +446,26 @@ function cloneEventGameState(state: EventGameState): EventGameState {
       eventLog: [...state.combo.eventLog]
     },
     marketPressure: { ...state.marketPressure },
+    routeMap: cloneRouteMap(state.routeMap),
+    shop: {
+      ...state.shop,
+      sections: {
+        cards: state.shop.sections.cards.map((item) => ({ ...item })),
+        tools: state.shop.sections.tools.map((item) => ({ ...item })),
+        insurance: state.shop.sections.insurance.map((item) => ({ ...item })),
+        services: state.shop.sections.services.map((item) => ({ ...item }))
+      },
+      items: state.shop.items.map((item) => ({ ...item }))
+    },
     tools: [...state.tools],
+    consumables: [...state.consumables],
     rewardChoices: [...state.rewardChoices],
     runHistory: [...state.runHistory],
     resolvedEventTypes: [...state.resolvedEventTypes],
+    resolvedEventsThisAction: [...state.resolvedEventsThisAction],
+    cashTransactions: [...state.cashTransactions],
+    cashTransactionsThisAction: [...state.cashTransactionsThisAction],
+    lastChainSummary: { ...state.lastChainSummary, keyEvents: [...state.lastChainSummary.keyEvents] },
     toolUseCounts: { ...state.toolUseCounts },
     triggeredComboMilestones: Object.fromEntries(
       Object.entries(state.triggeredComboMilestones).map(([toolId, thresholds]) => [
@@ -357,5 +473,20 @@ function cloneEventGameState(state: EventGameState): EventGameState {
         [...thresholds]
       ])
     )
+  };
+}
+
+function cloneRouteMap(routeMap: RouteMapState): RouteMapState {
+  return {
+    ...routeMap,
+    acts: routeMap.acts.map((act) => ({
+      ...act,
+      nodes: act.nodes.map((node) => ({
+        ...node,
+        nextNodeIds: [...node.nextNodeIds]
+      }))
+    })),
+    completedNodeIds: [...routeMap.completedNodeIds],
+    availableNodeIds: [...routeMap.availableNodeIds]
   };
 }

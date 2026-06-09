@@ -56,8 +56,8 @@ describe('continuous deck and Turboturn rules', () => {
     const playedState = playCard(drawnState, 'test-card-cash-insurance');
 
     expect(drawnState.hand).toHaveLength(1);
-    expect(playedState.phase).toBe('dayEnd');
-    expect(playedState.combo.eventLog.join('\n')).toContain('收盘整理');
+    expect(playedState.phase).toBe('ENEMY_INTENT');
+    expect(playedState.combo.eventLog.join('\n')).toContain('进入敌方意图结算');
   });
 
   it('increases turboturnStep when costs rise by one', () => {

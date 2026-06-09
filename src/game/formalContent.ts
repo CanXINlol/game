@@ -23,7 +23,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 18,
     baseRisk: 15,
     cardType: 'BUY',
-    playEffect: '获得收益，触发 TECH，并让 combo +1。\n高风险成长牌，适合 0→1→2→3 的启动中段。',
+    archetype: '板块',
+    playEffect: '买入科技主线，获得收益并推进连锁。\n科技工具在场时更强，适合开局启动板块。\n风险 +15。',
     effects: [
       { type: 'GAIN_PROFIT', value: 18, sector: 'TECH' },
       { type: 'TRIGGER_SECTOR', sector: 'TECH' },
@@ -40,7 +41,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 12,
     baseRisk: 9,
     cardType: 'DRAW',
-    playEffect: '获得收益并抽 1 张牌，延长科技链。\n中等风险，主要价值是补手牌。',
+    archetype: '板块',
+    playEffect: '获得科技收益，并补 1 张手牌。\n手牌不足或想继续接科技牌时更强。\n风险 +9。',
     effects: [
       { type: 'GAIN_PROFIT', value: 12, sector: 'TECH' },
       { type: 'DRAW_CARD', value: 1 }
@@ -56,7 +58,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 16,
     baseRisk: 14,
     cardType: 'CHASE',
-    playEffect: '已有收益时触发 LIMIT_UP，获得追击收益并 combo +1。\n高风险追涨牌，断链时不会爆发。',
+    archetype: '追涨',
+    playEffect: '点燃一轮追涨，获得高额收益并提高连锁。\n如果本回合已经赚钱，效果更强。\n风险 +14。',
     effects: [{ type: 'TRIGGER_LIMIT_UP_IF_PROFIT', profit: 22, comboGain: 1 }]
   },
   {
@@ -69,7 +72,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 9,
     baseRisk: 7,
     cardType: 'DIP_BUY',
-    playEffect: '发生过风险或亏损后获得反弹收益并降 risk。\n需要先吃到风险事件，空打收益较弱。',
+    archetype: '低吸',
+    playEffect: '在回撤后低吸，赚回收益并降低风险。\n本回合已经承受风险或亏损时更强。\n风险 +7。',
     effects: [
       {
         type: 'REBOUND_IF_EVENT',
@@ -89,7 +93,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 24,
     baseRisk: 22,
     cardType: 'LEVERAGE',
-    playEffect: '获得高收益，触发 LIMIT_UP，combo +2。\n同时 risk +18，是爽感和爆仓一起加速的牌。',
+    archetype: '杠杆',
+    playEffect: '用融资放大仓位，获得爆发收益和连锁。\n已有追涨或杠杆工具时更强。\n额外风险 +18。',
     effects: [
       { type: 'GAIN_PROFIT', value: 24, sector: 'TECH' },
       { type: 'TRIGGER_LIMIT_UP', comboGain: 2 },
@@ -106,7 +111,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 10,
     baseRisk: 8,
     cardType: 'SECTOR',
-    playEffect: '触发 TECH，获得收益并少量降 risk。\n收益不高，但能稳住板块连锁。',
+    archetype: '板块',
+    playEffect: '护住科技板块，获得收益并小幅降风险。\n需要稳定板块连锁时更强。\n风险 +8。',
     effects: [
       { type: 'TRIGGER_SECTOR', sector: 'TECH' },
       { type: 'GAIN_PROFIT', value: 10, sector: 'TECH' },
@@ -123,7 +129,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 5,
     baseRisk: 3,
     cardType: 'CASH_OUT',
-    playEffect: '锁定 20% 浮盈并降低 risk。\n低收益防守牌，会牺牲一部分继续爆发空间。',
+    archetype: '止盈',
+    playEffect: '锁定一部分浮盈，并降低风险。\n风险接近警戒线或已赚到钱时更强。\n会减少继续滚动的浮盈。',
     effects: [{ type: 'CASH_OUT', ratio: 0.2, riskReduction: 8 }]
   },
   {
@@ -136,7 +143,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 10,
     baseRisk: 8,
     cardType: 'SECTOR',
-    playEffect: '触发 CONSUMER 并抽 1 张牌。\n本身不直接赚钱，依赖工具和后续牌接力。',
+    archetype: '板块',
+    playEffect: '切入消费板块，并补 1 张手牌。\n有板块工具或需要换路线时更强。\n风险 +8。',
     effects: [
       { type: 'TRIGGER_SECTOR', sector: 'CONSUMER' },
       { type: 'DRAW_CARD', value: 1 }
@@ -152,7 +160,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 7,
     baseRisk: 4,
     cardType: 'BUY',
-    playEffect: '获得小额收益并 risk -4。\n低风险慢牌，适合给高风险连锁垫底。',
+    archetype: '风控',
+    playEffect: '买入稳健蓝筹，获得小额收益并降风险。\n准备接高风险牌前更强。\n爆发较低。',
     effects: [
       { type: 'GAIN_PROFIT', value: 7, sector: 'CONSUMER' },
       { type: 'REDUCE_RISK', value: 4 }
@@ -168,7 +177,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 11,
     baseRisk: 9,
     cardType: 'DIP_BUY',
-    playEffect: '风险事件后获得反弹收益并 combo +1。\n需要前置风险，节奏偏防守反击。',
+    archetype: '低吸',
+    playEffect: '在消费回撤后抄底，获得反弹收益和连锁。\n本回合已经承受风险时更强。\n风险 +9。',
     effects: [
       {
         type: 'REBOUND_IF_EVENT',
@@ -189,7 +199,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 16,
     baseRisk: 14,
     cardType: 'CHASE',
-    playEffect: '已有收益时触发 LIMIT_UP，获得追击收益并 combo +1。\n高风险题材牌，适合接在收益事件后。',
+    archetype: '追涨',
+    playEffect: '追入热门题材，获得追击收益并提高连锁。\n接在赚钱牌后更强。\n风险 +14。',
     effects: [{ type: 'TRIGGER_LIMIT_UP_IF_PROFIT', profit: 20, comboGain: 1 }]
   },
   {
@@ -202,7 +213,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 12,
     baseRisk: 10,
     cardType: 'DRAW',
-    playEffect: '获得收益，触发 CONSUMER，并抽 1 张牌。\n中等风险，适合轮动流补牌。',
+    archetype: '板块',
+    playEffect: '抓住消费复苏，获得收益并补 1 张牌。\n轮动到消费板块时更强。\n风险 +10。',
     effects: [
       { type: 'GAIN_PROFIT', value: 12, sector: 'CONSUMER' },
       { type: 'TRIGGER_SECTOR', sector: 'CONSUMER' },
@@ -219,7 +231,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 19,
     baseRisk: 16,
     cardType: 'BUY',
-    playEffect: '获得高收益，触发 MEDICAL，并 combo +1。\n高风险概念牌，适合板块共振开路。',
+    archetype: '板块',
+    playEffect: '买入药研主线，获得高收益并推进连锁。\n医药板块工具在场时更强。\n风险 +16。',
     effects: [
       { type: 'GAIN_PROFIT', value: 19, sector: 'MEDICAL' },
       { type: 'TRIGGER_SECTOR', sector: 'MEDICAL' },
@@ -236,7 +249,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 10,
     baseRisk: 8,
     cardType: 'SECTOR',
-    playEffect: '触发 MEDICAL，获得收益并降 risk。\n中等风险，负责把医药链接稳。',
+    archetype: '板块',
+    playEffect: '打出医械共振，获得收益并小幅降风险。\n需要维持医药板块时更强。\n风险 +8。',
     effects: [
       { type: 'TRIGGER_SECTOR', sector: 'MEDICAL' },
       { type: 'GAIN_PROFIT', value: 10, sector: 'MEDICAL' },
@@ -253,7 +267,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 7,
     baseRisk: 4,
     cardType: 'CASH_OUT',
-    playEffect: '锁定 25% 浮盈并 risk -10。\n低风险防守牌，会降低继续贪的浮盈弹性。',
+    archetype: '止盈',
+    playEffect: '把医药浮盈装进药箱，并大幅降风险。\n浮盈较高或风险偏高时更强。\n会削弱继续爆发空间。',
     effects: [{ type: 'CASH_OUT', ratio: 0.25, riskReduction: 10 }]
   },
   {
@@ -266,7 +281,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 25,
     baseRisk: 23,
     cardType: 'RISK',
-    playEffect: '获得巨大收益并 combo +1。\n同时 risk +22，可能直接把自己送到爆仓线。',
+    archetype: '追涨',
+    playEffect: '押注医药概念爆发，获得巨大收益和连锁。\n有保险或降风险工具时更强。\n额外风险 +22。',
     effects: [
       { type: 'GAIN_PROFIT', value: 28, sector: 'MEDICAL' },
       { type: 'GAIN_RISK', value: 22 },
@@ -283,7 +299,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 12,
     baseRisk: 9,
     cardType: 'COPY',
-    playEffect: '复制上一张牌的基础效果，触发 CARD_COPIED。\n中等风险，强度取决于上一张牌。',
+    archetype: '复制',
+    playEffect: '复制上一张牌的核心效果。\n接在高收益或强功能牌后更强。\n风险 +9。',
     effects: [{ type: 'COPY_PREVIOUS_CARD' }]
   },
   {
@@ -296,7 +313,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 5,
     baseRisk: 3,
     cardType: 'DIP_BUY',
-    playEffect: '有风险事件时回补收益并 risk -8。\n低风险防守牌，空打需要等待触发。',
+    archetype: '风控',
+    playEffect: '防守低吸，回补收益并大幅降风险。\n本回合已经吃到风险时更强。\n空打收益有限。',
     effects: [
       {
         type: 'REBOUND_IF_EVENT',
@@ -316,7 +334,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 18,
     baseRisk: 16,
     cardType: 'BUY',
-    playEffect: '获得收益，触发 ENERGY，并 combo +1。\n高风险龙头牌，适合新能源链启动。',
+    archetype: '板块',
+    playEffect: '买入电池龙头，获得收益并推进连锁。\n新能源工具在场时更强。\n风险 +16。',
     effects: [
       { type: 'GAIN_PROFIT', value: 18, sector: 'ENERGY' },
       { type: 'TRIGGER_SECTOR', sector: 'ENERGY' },
@@ -333,7 +352,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 10,
     baseRisk: 8,
     cardType: 'DRAW',
-    playEffect: '获得收益并抽 1 张牌。\n中等风险，主要负责延长回合。',
+    archetype: '板块',
+    playEffect: '获得风电收益，并补 1 张手牌。\n需要延长新能源回合时更强。\n风险 +8。',
     effects: [
       { type: 'GAIN_PROFIT', value: 10, sector: 'ENERGY' },
       { type: 'DRAW_CARD', value: 1 }
@@ -349,7 +369,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 17,
     baseRisk: 14,
     cardType: 'CHASE',
-    playEffect: '已有收益时触发 LIMIT_UP，获得追击收益并 combo +1。\n高风险追涨牌，需要先有收益铺垫。',
+    archetype: '追涨',
+    playEffect: '追击储能行情，获得高额收益并提高连锁。\n本回合已经赚钱时更强。\n风险 +14。',
     effects: [{ type: 'TRIGGER_LIMIT_UP_IF_PROFIT', profit: 21, comboGain: 1 }]
   },
   {
@@ -362,7 +383,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 9,
     baseRisk: 8,
     cardType: 'SECTOR',
-    playEffect: '触发 ENERGY，压力低于半血时追加伤害。\n中等风险，适合收割 MarketPressure。',
+    archetype: '终结',
+    playEffect: '回补光伏仓位，并对低血量市场压力追加打击。\n市场压力低于半血时更强。\n风险 +8。',
     effects: [
       { type: 'TRIGGER_SECTOR', sector: 'ENERGY' },
       { type: 'DAMAGE_PRESSURE_IF_HP_BELOW', thresholdRatio: 0.5, damage: 20 }
@@ -378,7 +400,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 24,
     baseRisk: 23,
     cardType: 'LEVERAGE',
-    playEffect: '触发 LIMIT_UP，获得高收益并 combo +2。\n同时 risk +20，是高爆发高危险牌。',
+    archetype: '杠杆',
+    playEffect: '用氢能题材点火，获得高收益和大量连锁。\n追涨工具或杠杆工具在场时更强。\n额外风险 +20。',
     effects: [
       { type: 'TRIGGER_LIMIT_UP', comboGain: 2 },
       { type: 'GAIN_PROFIT', value: 24, sector: 'ENERGY' },
@@ -395,7 +418,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 12,
     baseRisk: 9,
     cardType: 'COPY',
-    playEffect: '复制上一张牌的基础效果。\n中等风险，适合接在抽牌或追击之后。',
+    archetype: '复制',
+    playEffect: '复制上一张产业牌的核心效果。\n接在抽牌、追涨或板块牌后更强。\n风险 +9。',
     effects: [{ type: 'COPY_PREVIOUS_CARD' }]
   },
   {
@@ -408,7 +432,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 16,
     baseRisk: 14,
     cardType: 'CHASE',
-    playEffect: '已有收益时触发 LIMIT_UP，获得追击收益并 combo +1。\n额外 risk +6，追涨时会推高爆仓风险。',
+    archetype: '追涨',
+    playEffect: '追击盘口异动，获得高额收益并提高连锁。\n本回合已经赚钱时更强。\n额外风险 +6。',
     effects: [
       { type: 'TRIGGER_LIMIT_UP_IF_PROFIT', profit: 20, comboGain: 1 },
       { type: 'GAIN_RISK', value: 6 }
@@ -424,7 +449,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 6,
     baseRisk: 3,
     cardType: 'CASH_OUT',
-    playEffect: '锁定 20% 浮盈并 risk -8。\n低风险落袋牌，适合在爆仓前刹车。',
+    archetype: '止盈',
+    playEffect: '锁定蓝筹浮盈，并降低风险。\n爆仓前刹车或保存胜势时更强。\n收益爆发较低。',
     effects: [{ type: 'CASH_OUT', ratio: 0.2, riskReduction: 8 }]
   },
   {
@@ -437,7 +463,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 9,
     baseRisk: 7,
     cardType: 'DIP_BUY',
-    playEffect: '风险事件后获得反弹收益并降低 risk。\n中等风险，需要先承受风险再回血。',
+    archetype: '低吸',
+    playEffect: '在金融回撤后反弹，获得收益并降低风险。\n本回合已经承受风险时更强。\n风险 +7。',
     effects: [
       {
         type: 'REBOUND_IF_EVENT',
@@ -457,7 +484,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 18,
     baseRisk: 16,
     cardType: 'RISK',
-    playEffect: '获得高收益并 combo +1。\n同时 risk +14，适合有风控工具时使用。',
+    archetype: '杠杆',
+    playEffect: '押注金科爆发，获得高收益并提高连锁。\n有风控或保险兜底时更强。\n额外风险 +14。',
     effects: [
       { type: 'GAIN_PROFIT', value: 20, sector: 'FINANCE' },
       { type: 'GAIN_RISK', value: 14 },
@@ -474,7 +502,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 8,
     baseRisk: 7,
     cardType: 'DRAW',
-    playEffect: '触发 FINANCE 并抽 1 张牌。\n中等风险，用来接金融工具和延长手牌。',
+    archetype: '杠杆',
+    playEffect: '打开融资通道，并补 1 张手牌。\n需要延长金融或杠杆回合时更强。\n风险 +7。',
     effects: [
       { type: 'TRIGGER_SECTOR', sector: 'FINANCE' },
       { type: 'DRAW_CARD', value: 1 }
@@ -490,7 +519,8 @@ const FORMAL_EVENT_CARD_DEFINITIONS: FormalEventCardDefinition[] = [
     baseReturn: 23,
     baseRisk: 22,
     cardType: 'FINISHER',
-    playEffect: '按 comboCount 获得爆发收益并结束当前交易。\n同时 risk +10，最好在高 combo 时打出。',
+    archetype: '终结',
+    playEffect: '按当前连锁层数结算爆发收益，并结束交易。\n连锁越高越强，适合作为最后一张牌。\n额外风险 +10。',
     effects: [
       { type: 'GAIN_PROFIT_FROM_COMBO', profitPerCombo: 16 },
       { type: 'GAIN_RISK', value: 10 },
@@ -556,7 +586,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-limit-up-calculator',
     name: '涨停板计算器',
-    description: '触发条件：LIMIT_UP。效果：combo +2，并获得追涨收益。',
+    description: '触发条件：打出追涨或点火效果。效果：连锁 +2，并获得追涨收益。',
     triggerEvents: ['LIMIT_UP'],
     trigger: { type: 'LIMIT_UP' },
     effects: [
@@ -567,7 +597,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-red-candle-stamp',
     name: '连击终端',
-    description: '触发条件：COMBO_GAINED。效果：每回合最多 4 次，获得小额收益。',
+    description: '触发条件：连锁增加。效果：每回合最多 4 次，获得小额收益。',
     triggerEvents: ['COMBO_GAINED'],
     trigger: { type: 'COMBO_GAINED', minValue: 1 },
     limitPerTurn: 4,
@@ -576,7 +606,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-hot-money-compass',
     name: '科技扩音器',
-    description: '触发条件：TECH 板块事件。效果：获得收益，并 combo +1。',
+    description: '触发条件：科技板块被激活。效果：获得收益，并连锁 +1。',
     triggerEvents: ['SECTOR_TRIGGERED'],
     trigger: { type: 'SECTOR_TRIGGERED', meta: { sector: 'TECH' } },
     effects: [
@@ -587,7 +617,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-bubble-loupe',
     name: '游资席位',
-    description: '触发条件：LIMIT_UP。效果：每回合最多 3 次，获得收益，但 risk +4。',
+    description: '触发条件：打出追涨或点火效果。效果：每回合最多 3 次，获得收益，但风险 +4。',
     triggerEvents: ['LIMIT_UP'],
     trigger: { type: 'LIMIT_UP' },
     limitPerTurn: 3,
@@ -599,7 +629,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-old-trader-cup',
     name: '老股民茶杯',
-    description: '触发条件：RISK_GAINED。效果：每天最多 1 次，risk -8。',
+    description: '触发条件：风险上升。效果：每天最多 1 次，风险 -8。',
     triggerEvents: ['RISK_GAINED'],
     trigger: { type: 'RISK_GAINED' },
     limitPerDay: 1,
@@ -608,7 +638,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-broker-insurance',
     name: '券商保险单',
-    description: '触发条件：BANKRUPTCY_WARNING。效果：每天最多 1 次，锁定部分浮盈。',
+    description: '触发条件：接近爆仓。效果：每天最多 1 次，锁定部分浮盈。',
     triggerEvents: ['BANKRUPTCY_WARNING'],
     trigger: { type: 'BANKRUPTCY_WARNING' },
     limitPerDay: 1,
@@ -617,7 +647,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-stop-loss-ruler',
     name: '风险补偿器',
-    description: '触发条件：RISK_GAINED 且数值至少 10。效果：risk -6。',
+    description: '触发条件：单次风险上升至少 10。效果：风险 -6。',
     triggerEvents: ['RISK_GAINED'],
     trigger: { type: 'RISK_GAINED', minValue: 10 },
     effects: [{ type: 'REDUCE_RISK', value: 6 }]
@@ -625,7 +655,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-calm-bell',
     name: '冷静铃',
-    description: '触发条件：LIMIT_DOWN。效果：每回合最多 2 次，risk -5。',
+    description: '触发条件：追涨失败或行情转弱。效果：每回合最多 2 次，风险 -5。',
     triggerEvents: ['LIMIT_DOWN'],
     trigger: { type: 'LIMIT_DOWN' },
     limitPerTurn: 2,
@@ -634,7 +664,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-industry-reports',
     name: '行业研报库',
-    description: '触发条件：任意板块事件。效果：每回合最多 4 次，combo +1。',
+    description: '触发条件：任意板块被激活。效果：每回合最多 4 次，连锁 +1。',
     triggerEvents: ['SECTOR_TRIGGERED'],
     trigger: { type: 'SECTOR_TRIGGERED' },
     limitPerTurn: 4,
@@ -643,7 +673,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-sector-thermometer',
     name: '板块温度计',
-    description: '触发条件：CONSUMER 板块事件。效果：抽 1 张牌。',
+    description: '触发条件：消费板块被激活。效果：抽 1 张牌。',
     triggerEvents: ['SECTOR_TRIGGERED'],
     trigger: { type: 'SECTOR_TRIGGERED', meta: { sector: 'CONSUMER' } },
     effects: [{ type: 'DRAW_CARD', value: 1 }]
@@ -651,7 +681,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-weak-sector-umbrella',
     name: '弱势雨伞',
-    description: '触发条件：MEDICAL 板块事件。效果：risk -5。',
+    description: '触发条件：医药板块被激活。效果：风险 -5。',
     triggerEvents: ['SECTOR_TRIGGERED'],
     trigger: { type: 'SECTOR_TRIGGERED', meta: { sector: 'MEDICAL' } },
     effects: [{ type: 'REDUCE_RISK', value: 5 }]
@@ -659,7 +689,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-blue-chip-ledger',
     name: '现金保险箱',
-    description: '触发条件：CASH_OUT。效果：额外锁定 10% 浮盈。',
+    description: '触发条件：锁定浮盈。效果：额外锁定 10% 浮盈。',
     triggerEvents: ['CASH_OUT'],
     trigger: { type: 'CASH_OUT' },
     effects: [{ type: 'LOCK_FLOATING_PROFIT', ratio: 0.1 }]
@@ -667,7 +697,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-chive-notebook',
     name: '韭菜笔记本',
-    description: '触发条件：LOSS_TAKEN。效果：抽 1 张牌，并 combo +1。',
+    description: '触发条件：承受亏损。效果：抽 1 张牌，并连锁 +1。',
     triggerEvents: ['LOSS_TAKEN'],
     trigger: { type: 'LOSS_TAKEN' },
     effects: [
@@ -678,7 +708,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-rebound-spring',
     name: '反弹弹簧',
-    description: '触发条件：RISK_REDUCED。效果：每回合最多 3 次，获得反弹收益。',
+    description: '触发条件：风险下降。效果：每回合最多 3 次，获得反弹收益。',
     triggerEvents: ['RISK_REDUCED'],
     trigger: { type: 'RISK_REDUCED' },
     limitPerTurn: 3,
@@ -687,7 +717,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-bargain-basket',
     name: '抄底菜篮',
-    description: '触发条件：RISK_GAINED 且数值至少 10。效果：获得补偿收益。',
+    description: '触发条件：单次风险上升至少 10。效果：获得补偿收益。',
     triggerEvents: ['RISK_GAINED'],
     trigger: { type: 'RISK_GAINED', minValue: 10 },
     effects: [{ type: 'GAIN_PROFIT', value: 10, sector: 'CONSUMER' }]
@@ -695,7 +725,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-paper-hands-gloves',
     name: '纸手套',
-    description: '触发条件：CASH_OUT。效果：risk -5。',
+    description: '触发条件：锁定浮盈。效果：风险 -5。',
     triggerEvents: ['CASH_OUT'],
     trigger: { type: 'CASH_OUT' },
     effects: [{ type: 'REDUCE_RISK', value: 5 }]
@@ -703,7 +733,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-margin-stamp',
     name: '融资印章',
-    description: '触发条件：LEVERAGE_ADDED。效果：combo +1，并获得收益。',
+    description: '触发条件：打出杠杆牌。效果：连锁 +1，并获得收益。',
     triggerEvents: ['LEVERAGE_ADDED'],
     trigger: { type: 'LEVERAGE_ADDED' },
     effects: [
@@ -714,7 +744,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-margin-seatbelt',
     name: '杠杆安全带',
-    description: '触发条件：LEVERAGE_ADDED。效果：每回合最多 2 次，risk -7。',
+    description: '触发条件：打出杠杆牌。效果：每回合最多 2 次，风险 -7。',
     triggerEvents: ['LEVERAGE_ADDED'],
     trigger: { type: 'LEVERAGE_ADDED' },
     limitPerTurn: 2,
@@ -723,7 +753,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-double-or-nothing-coin',
     name: '梭哈硬币',
-    description: '触发条件：combo 达到 5/10/20。效果：获得阶段爆发收益。',
+    description: '触发条件：连锁达到 5/10/20。效果：获得阶段爆发收益。',
     triggerEvents: ['COMBO_GAINED'],
     trigger: { type: 'COMBO_GAINED', comboThresholds: [5, 10, 20] },
     effects: [{ type: 'GAIN_PROFIT_BY_COMBO_THRESHOLD', values: { 5: 18, 10: 45, 20: 110 } }]
@@ -731,7 +761,7 @@ export const FORMAL_EVENT_TOOLS: EventTool[] = [
   {
     id: 'formal-tool-liquidation-helmet',
     name: '爆仓头盔',
-    description: '触发条件：BANKRUPTCY_WARNING。效果：每天最多 1 次，risk -12。',
+    description: '触发条件：接近爆仓。效果：每天最多 1 次，风险 -12。',
     triggerEvents: ['BANKRUPTCY_WARNING'],
     trigger: { type: 'BANKRUPTCY_WARNING' },
     limitPerDay: 1,
@@ -776,8 +806,12 @@ function getTriggerEvents(card: EventCard) {
 function getArchetypes(card: EventCard) {
   const archetypes = new Set<string>();
 
+  if (card.archetype) {
+    archetypes.add(card.archetype);
+  }
+
   if (card.effects.some((effect) => effect.type === 'TRIGGER_SECTOR')) {
-    archetypes.add('板块共振');
+    archetypes.add('板块');
   }
 
   if (
@@ -785,7 +819,7 @@ function getArchetypes(card: EventCard) {
       (effect) => effect.type === 'TRIGGER_LIMIT_UP' || effect.type === 'TRIGGER_LIMIT_UP_IF_PROFIT'
     )
   ) {
-    archetypes.add('追涨连击');
+    archetypes.add('追涨');
   }
 
   if (
@@ -796,7 +830,7 @@ function getArchetypes(card: EventCard) {
         effect.type === 'REBOUND_IF_EVENT'
     )
   ) {
-    archetypes.add('风控低吸');
+    archetypes.add('风控');
   }
 
   if (
@@ -804,11 +838,11 @@ function getArchetypes(card: EventCard) {
       (effect) => effect.type === 'DRAW_CARD' || effect.type === 'COPY_PREVIOUS_CARD'
     )
   ) {
-    archetypes.add('抽复制链');
+    archetypes.add('复制');
   }
 
   if (card.effects.some((effect) => effect.type === 'END_TRADE')) {
-    archetypes.add('终结爆发');
+    archetypes.add('终结');
   }
 
   return [...archetypes];

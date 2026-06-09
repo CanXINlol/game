@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { TEST_EVENT_TOOLS } from '../game/effects';
+import { FORMAL_EVENT_CARDS } from '../game/formalContent';
 import {
   applyRewardChoice,
   createRewardSeed,
   enterDayEndAfterReward,
   generateRewardChoices,
+  skipReward,
   startNextMarketPressure,
   type RewardOption
 } from '../game/rewards';
@@ -13,7 +14,7 @@ import { createTestEventGameState, playCard } from '../game/playCard';
 function createRewardReadyState(overrides: Parameters<typeof createTestEventGameState>[0] = {}) {
   const state = createTestEventGameState({
     seed: 'reward-seed',
-    tools: TEST_EVENT_TOOLS.filter((tool) => tool.id !== 'test-tool-quant-terminal'),
+      tools: [],
     marketPressure: {
       ...createTestEventGameState().marketPressure,
       hp: 10,
@@ -33,7 +34,7 @@ describe('reward generation and application', () => {
   it('generates reproducible reward choices from seed', () => {
     const state = createRewardReadyState();
 
-    expect(state.phase).toBe('reward');
+    expect(state.phase).toBe('REWARD');
     expect(state.rewardChoices).toHaveLength(3);
 
     const firstIds = state.rewardChoices.map((reward) => reward.id);
@@ -50,9 +51,9 @@ describe('reward generation and application', () => {
       id: 'test-add-card',
       kind: 'ADD_CARD',
       title: '追加热点',
-      description: '获得 1 张热点轮动。',
-      cardId: 'test-card-hot-rotation',
-      cardName: '热点轮动'
+      description: '获得 1 张正式牌。',
+      cardId: 'formal-tech-003',
+      cardName: '涨停追击'
     };
 
     const deckSizeBefore = state.hand.length + state.drawPile.length;
@@ -63,7 +64,7 @@ describe('reward generation and application', () => {
     expect(state.hand.length + state.drawPile.length).toBe(deckSizeBefore + 1);
     expect(
       [...state.hand, ...state.drawPile].some((card) =>
-        card.id.startsWith('test-card-hot-rotation')
+        card.id.startsWith('formal-tech-003')
       )
     ).toBe(true);
   });
@@ -74,9 +75,9 @@ describe('reward generation and application', () => {
       id: 'test-add-tool',
       kind: 'ADD_TOOL',
       title: '量化插件',
-      description: '获得工具“量化终端”。',
-      toolId: 'test-tool-quant-terminal',
-      toolName: '量化终端'
+      description: '获得工具“涨停板计算器”。',
+      toolId: 'formal-tool-limit-up-calculator',
+      toolName: '涨停板计算器'
     };
 
     state.rewardChoices = [reward];
@@ -84,7 +85,7 @@ describe('reward generation and application', () => {
     applyRewardChoice(state, reward.id);
 
     expect(state.tools).toHaveLength(toolCountBefore + 1);
-    expect(state.tools.some((tool) => tool.id === 'test-tool-quant-terminal')).toBe(true);
+    expect(state.tools.some((tool) => tool.id === 'formal-tool-limit-up-calculator')).toBe(true);
   });
 
   it('reduces risk when selecting reduce-risk reward', () => {
@@ -131,12 +132,12 @@ describe('reward generation and application', () => {
 
     applyRewardChoice(state, reward.id);
     state.rewardChoices = [];
-    state.phase = 'postReward';
+    state.phase = 'REWARD';
 
     const nextPressureState = cloneState(state);
     startNextMarketPressure(nextPressureState);
 
-    expect(nextPressureState.phase).toBe('playing');
+    expect(nextPressureState.phase).toBe('PLAYER_TURN');
     expect(nextPressureState.marketPressureIndex).toBe(1);
     expect(nextPressureState.marketPressure.name).toBe('消费回撤盘');
     expect(nextPressureState.ap).toBe(nextPressureState.maxAp);
@@ -144,7 +145,7 @@ describe('reward generation and application', () => {
     const dayEndState = cloneState(state);
     enterDayEndAfterReward(dayEndState);
 
-    expect(dayEndState.phase).toBe('dayEnd');
+    expect(dayEndState.phase).toBe('DAY_END');
   });
 
   it('applies initial combo bonus when continuing to the next pressure', () => {
@@ -176,5 +177,96 @@ describe('reward generation and application', () => {
 
     expect(first).toEqual(second);
     expect(createRewardSeed(state)).toBe('reward-seed-reward-2');
+  });
+
+  it('Act 1 rewards do not offer Act 3 finisher cards', () => {
+    const state = createTestEventGameState({
+      seed: 'act-1-reward',
+      tools: [],
+      routeMap: {
+        ...createTestEventGameState().routeMap,
+        currentAct: 1
+      }
+    });
+
+    const rewards = generateRewardChoices(state);
+    const cardReward = rewards.find((reward) => reward.kind === 'ADD_CARD');
+    const card = FORMAL_EVENT_CARDS.find((item) => item.id === cardReward?.cardId);
+
+    expect(card?.cardType).not.toBe('FINISHER');
+    expect(card?.cardType).not.toBe('LEVERAGE');
+    expect(card?.cardType).not.toBe('COPY');
+  });
+
+  it('Act 2 can offer middle-tier cards', () => {
+    const state = createTestEventGameState({ seed: 'act-2-reward', tools: [] });
+    state.routeMap.currentAct = 2;
+
+    const cardReward = generateRewardChoices(state).find(
+      (reward) => reward.kind === 'ADD_CARD'
+    );
+    const card = FORMAL_EVENT_CARDS.find((item) => item.id === cardReward?.cardId);
+
+    expect(['COPY', 'LEVERAGE', 'RISK', 'CHASE', 'DRAW', 'BUY', 'CASH_OUT']).toContain(
+      card?.cardType
+    );
+  });
+
+  it('Act 3 Boss can offer a finisher card', () => {
+    const state = createTestEventGameState({ seed: 'act-3-reward', tools: [] });
+    const boss = state.routeMap.acts[2].nodes.find((node) => node.type === 'BOSS');
+
+    if (!boss) throw new Error('Expected boss node.');
+
+    state.routeMap.currentAct = 3;
+    state.routeMap.currentNodeId = boss.id;
+
+    const cardReward = generateRewardChoices(state).find(
+      (reward) => reward.kind === 'ADD_CARD'
+    );
+    const card = FORMAL_EVENT_CARDS.find((item) => item.id === cardReward?.cardId);
+
+    expect(card?.cardType).toBe('FINISHER');
+  });
+
+  it('formal rewards do not include test tools', () => {
+    const state = createTestEventGameState({ seed: 'formal-tools-only', tools: [] });
+    state.routeMap.currentAct = 2;
+
+    const rewards = generateRewardChoices(state);
+
+    expect(rewards.every((reward) => !reward.toolId?.startsWith('test-'))).toBe(true);
+  });
+
+  it('normal and elite node rewards differ', () => {
+    const normalState = createTestEventGameState({ seed: 'node-reward', tools: [] });
+    const eliteState = createTestEventGameState({ seed: 'node-reward', tools: [] });
+    const elite = eliteState.routeMap.acts[1].nodes.find(
+      (node) => node.type !== 'BOSS'
+    );
+
+    if (!elite) throw new Error('Expected elite node.');
+
+    elite.type = 'ELITE_MARKET';
+    eliteState.routeMap.currentNodeId = elite.id;
+
+    const normalKinds = generateRewardChoices(normalState).map((reward) => reward.kind);
+    const eliteKinds = generateRewardChoices(eliteState).map((reward) => reward.kind);
+
+    expect(eliteKinds).not.toEqual(normalKinds);
+    expect(eliteKinds).toContain('ADD_TOOL');
+  });
+
+  it('skipping reward gives cash compensation', () => {
+    const state = createRewardReadyState({ cash: 20 });
+    const result = applyRewardChoice(state, state.rewardChoices[0].id);
+    expect(result.message).toContain('奖励生效');
+
+    const skipState = createRewardReadyState({ cash: 20 });
+    const before = skipState.cash;
+    const skipResult = skipReward(skipState);
+
+    expect(skipResult.message).toContain('现金 +15');
+    expect(skipState.cash).toBe(before + 15);
   });
 });

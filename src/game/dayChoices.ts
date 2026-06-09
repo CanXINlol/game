@@ -1,5 +1,6 @@
 import { getComboMultiplier } from './combo';
 import { discardContinuousTurn, drawFromContinuousDeck } from './deck';
+import { cashOutFloatingProfit } from './economy';
 import { createMarketPressureByIndex } from './marketPressure';
 import type { EventGameState } from './playCard';
 
@@ -78,20 +79,20 @@ export function applyDayChoice(
   state.lastDayChoice = choice;
 
   if (choice === 'cashOut') {
+    const beforeCash = state.cash;
     const lockedAmount = roundToTwoDecimals(state.combo.currentChainProfit * 0.7);
-    state.lockedProfit = roundToTwoDecimals(state.lockedProfit + lockedAmount);
-    state.combo = {
-      ...state.combo,
-      currentChainProfit: roundToTwoDecimals(
-        state.combo.currentChainProfit - lockedAmount
-      )
-    };
+    cashOutFloatingProfit(state, 0.7, '日终止盈');
     state.risk = Math.max(0, roundToTwoDecimals(state.risk - 20));
     state.nextInitialCombo = 0;
     state.nextProfitMultiplier = 1;
     state.nextApBonus = 0;
     state.nextMaxRiskPenalty = 0;
-    pushHistory(state, `日终选择：止盈，锁定 ${lockedAmount} 浮盈，Risk -20。`);
+    pushHistory(
+      state,
+      `日终选择：止盈，${lockedAmount} 浮盈转为现金，现金 +${roundToTwoDecimals(
+        state.cash - beforeCash
+      )}，风险 -20。`
+    );
     startNextTradingDay(state, '止盈后进入下一交易日。');
     return state;
   }
@@ -155,7 +156,13 @@ function startNextTradingDay(state: EventGameState, message: string) {
     state.marketPressureIndex
   );
   state.encounterTurn = 0;
-  state.phase = 'playing';
+  state.currentTurn = 1;
+  state.currentIntentId = state.marketPressure.intent.id;
+  state.lastResolvedIntentId = null;
+  state.intentResolvedThisTurn = false;
+  state.canResolveIntent = false;
+  state.encounterStatus = 'ACTIVE';
+  state.phase = 'PLAYER_TURN';
   state.rewardChoices = [];
   state.playedCardsThisTurn = [];
   state.lastPlayedCard = null;
@@ -186,7 +193,13 @@ function startNextMarketPressureForGreed(state: EventGameState) {
     reward: `稀有度 +${state.rewardRarityBonus} 的测试奖励`
   };
   state.encounterTurn = 0;
-  state.phase = 'playing';
+  state.currentTurn = 1;
+  state.currentIntentId = state.marketPressure.intent.id;
+  state.lastResolvedIntentId = null;
+  state.intentResolvedThisTurn = false;
+  state.canResolveIntent = false;
+  state.encounterStatus = 'ACTIVE';
+  state.phase = 'PLAYER_TURN';
   state.rewardChoices = [];
   state.ap = state.maxAp;
   state.maxActionPoints = state.maxAp;
@@ -249,7 +262,8 @@ function markBankruptIfNeeded(state: EventGameState, effectiveMaxRisk = state.ma
   }
 
   state.maxRisk = effectiveMaxRisk;
-  state.phase = 'bankrupt';
+  state.phase = 'RUN_LOST';
+  state.encounterStatus = 'LOST';
   state.runHistory.push(
     `爆仓：Risk ${state.risk}/${effectiveMaxRisk}，最后一次选择 ${getDayChoiceLabel(state.lastDayChoice)}。`
   );

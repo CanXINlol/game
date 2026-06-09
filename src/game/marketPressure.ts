@@ -1,6 +1,7 @@
 import { createMarketIntent, type MarketIntent } from './encounters';
 import type { GameEvent } from './events';
 import type { EventGameState } from './playCard';
+import type { RouteNodeType } from '../data/routeNodes';
 
 export interface MarketPressure {
   id: string;
@@ -51,6 +52,43 @@ export const MARKET_PRESSURE_DEFINITIONS: Omit<MarketPressure, 'hp'>[] = [
   }
 ];
 
+const NORMAL_PRESSURE_NAMES = [
+  '散户踩踏',
+  '夜盘异动',
+  '玻璃涨停',
+  '灰色研报',
+  '迟到利好',
+  '空头回声',
+  '尾盘拉升',
+  '假突破',
+  '暗池波纹',
+  '旧账重估'
+];
+
+const ELITE_PRESSURE_NAMES = [
+  '龙虎榜幽灵',
+  '杠杆围城',
+  '跌停回廊',
+  '量化黑箱',
+  '熔断前夜',
+  '高位接盘局'
+];
+
+const BOSS_PRESSURES = {
+  1: {
+    name: '红线审计',
+    description: '终端弹出一条不会关闭的红线：越是高风险追涨，越容易被它抽走节奏。'
+  },
+  2: {
+    name: '黑池枯潮',
+    description: '盘口像干涸的黑池，抽牌和复制都变得沉重，流动性开始反过来吞噬你。'
+  },
+  3: {
+    name: '最后一根阳线',
+    description: '它用漂亮阳线诱导你继续贪婪，然后清算所有没来得及锁住的收益。'
+  }
+} as const;
+
 export function createTestMarketPressure(): MarketPressure {
   return createMarketPressureByIndex('test-run', 0);
 }
@@ -63,6 +101,30 @@ export function createMarketPressureByIndex(seed: string, index: number): Market
     ...definition,
     hp: definition.maxHp,
     intent: createMarketIntent(seed, index)
+  };
+}
+
+export function createMarketPressureForRouteNode(
+  seed: string,
+  index: number,
+  nodeType: RouteNodeType,
+  act: 1 | 2 | 3
+): MarketPressure {
+  const basePressure = createMarketPressureByIndex(seed, index);
+  const multiplier = getRoutePressureMultiplier(nodeType, act);
+  const maxHp = roundToTwoDecimals(basePressure.maxHp * multiplier);
+  const shield = roundToTwoDecimals(
+    basePressure.shield * multiplier + getRouteShieldBonus(nodeType, act)
+  );
+
+  return {
+    ...basePressure,
+    name: getRoutePressureName(basePressure.name, nodeType, act, index),
+    description: getRoutePressureDescription(basePressure.description, nodeType, act),
+    hp: maxHp,
+    maxHp,
+    shield,
+    reward: getRouteRewardText(nodeType)
   };
 }
 
@@ -169,4 +231,77 @@ export function applyDirectMarketPressureDamage(
 
 function roundToTwoDecimals(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function getRoutePressureMultiplier(nodeType: RouteNodeType, act: 1 | 2 | 3) {
+  if (nodeType === 'BOSS') {
+    return act === 3 ? 3.4 : 2.2 + act * 0.35;
+  }
+
+  if (nodeType === 'ELITE_MARKET') {
+    return 1.45 + act * 0.25;
+  }
+
+  return 1 + act * 0.18;
+}
+
+function getRouteShieldBonus(nodeType: RouteNodeType, act: 1 | 2 | 3) {
+  if (nodeType === 'BOSS') {
+    return 18 + act * 12;
+  }
+
+  if (nodeType === 'ELITE_MARKET') {
+    return 8 + act * 6;
+  }
+
+  return act * 3;
+}
+
+function getRoutePressureName(
+  name: string,
+  nodeType: RouteNodeType,
+  act: 1 | 2 | 3,
+  index: number
+) {
+  if (nodeType === 'BOSS') {
+    return BOSS_PRESSURES[act].name;
+  }
+
+  if (nodeType === 'ELITE_MARKET') {
+    return ELITE_PRESSURE_NAMES[index % ELITE_PRESSURE_NAMES.length];
+  }
+
+  if (nodeType === 'NORMAL_MARKET') {
+    return NORMAL_PRESSURE_NAMES[index % NORMAL_PRESSURE_NAMES.length];
+  }
+
+  return name;
+}
+
+function getRoutePressureDescription(
+  description: string,
+  nodeType: RouteNodeType,
+  act: 1 | 2 | 3
+) {
+  if (nodeType === 'BOSS') {
+    return `${BOSS_PRESSURES[act].description} 击穿第三幕噩兆即通关。`;
+  }
+
+  if (nodeType === 'ELITE_MARKET') {
+    return `${description} 这类精英怪谈更难，但奖励更好。`;
+  }
+
+  return description;
+}
+
+function getRouteRewardText(nodeType: RouteNodeType) {
+  if (nodeType === 'BOSS') {
+    return '强力工具或关键奖励';
+  }
+
+  if (nodeType === 'ELITE_MARKET') {
+    return '工具、稀有牌或大量现金';
+  }
+
+  return '普通牌、少量现金或降低风险';
 }

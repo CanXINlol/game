@@ -1,5 +1,6 @@
 import type { DayChoiceId } from '../store/gameStore';
 import type { DayChoicePreview } from '../game/dayChoices';
+import { localizeText } from '../game/localization';
 
 export function DayChoicePanel(props: {
   floatingProfit: number;
@@ -12,11 +13,11 @@ export function DayChoicePanel(props: {
     <section className="panel day-choice-panel">
       <div className="section-heading">
         <div>
-          <p className="section-label">Day End</p>
+          <p className="section-label">日终</p>
           <h2>现在走，还是继续贪？</h2>
         </div>
         <span className="status-pill">
-          Risk {props.risk.toFixed(1)} / {props.maxRisk}
+          风险 {props.risk.toFixed(1)} / {props.maxRisk}
         </span>
       </div>
       <p className="loss-warning">
@@ -34,10 +35,10 @@ export function DayChoicePanel(props: {
             onClick={() => props.onChoose(preview.id)}
           >
             <strong>{preview.title}</strong>
-            <span>{preview.profitText}</span>
-            <span>{preview.riskText}</span>
-            <span>{preview.nextDayText}</span>
-            <em>{preview.warningText}</em>
+            <span>{localizeText(preview.profitText)}</span>
+            <span>{localizeText(preview.riskText)}</span>
+            <span>{localizeText(preview.nextDayText)}</span>
+            <em>{localizeText(preview.warningText)}</em>
           </button>
         ))}
       </div>

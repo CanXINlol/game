@@ -1,6 +1,7 @@
 import { applyComboEvent } from './combo';
 import { getDayChoiceLabel } from './dayChoices';
 import { drawFromContinuousDeck } from './deck';
+import { gainCash } from './economy';
 import type { GameEvent, GameEventType } from './events';
 import {
   applyDirectMarketPressureDamage,
@@ -8,6 +9,11 @@ import {
 } from './marketPressure';
 import type { EventGameState } from './playCard';
 import { generateRewardChoices } from './rewards';
+import {
+  applyRunFailureConditions,
+  getRouteNode,
+  isFinalBossCleared
+} from './routeMap';
 import type { EventCardCost, EventCardRole } from './types';
 
 export interface EventCard {
@@ -16,6 +22,7 @@ export interface EventCard {
   sector: string;
   rank: number;
   cardType?: FormalCardType;
+  archetype?: string;
   risk?: string;
   tags?: string[];
   baseReturn?: number;
@@ -475,6 +482,7 @@ export function resolveGameEvent(
 
   state.combo.eventLog.push(resolvedEvent.message);
   state.resolvedEventTypes.push(resolvedEvent.type);
+  state.resolvedEventsThisAction.push(resolvedEvent);
   state.combo = applyComboEvent(state.combo, resolvedEvent);
 
   const nextEvents: GameEvent[] = [];
@@ -487,6 +495,7 @@ export function resolveGameEvent(
     state.lockedProfit = roundToTwoDecimals(
       state.lockedProfit + (resolvedEvent.value ?? 0)
     );
+    gainCash(state, resolvedEvent.value ?? 0, resolvedEvent.sourceName);
   }
 
   if (resolvedEvent.type === 'RISK_GAINED') {
@@ -524,25 +533,42 @@ export function resolveGameEvent(
   }
 
   if (resolvedEvent.type === 'MARKET_PRESSURE_CLEARED') {
-    state.phase = 'reward';
+    state.encounterStatus = 'CLEARED';
+    state.canResolveIntent = false;
+    awardMarketPressureCash(state);
+    if (isFinalBossCleared(state)) {
+      state.phase = 'RUN_WON';
+      state.runHistory.push('通关：击败第三幕最终 Boss。');
+      state.combo.eventLog.push('最终 Boss 被击败，本局通关。');
+    } else {
+      state.phase = 'REWARD';
+    }
   }
 
-  if (resolvedEvent.type === 'REWARD_DROPPED') {
+  if (resolvedEvent.type === 'REWARD_DROPPED' && state.phase === 'REWARD') {
     state.rewardChoices = generateRewardChoices(state);
   }
 
   if (resolvedEvent.type === 'BANKRUPTCY_WARNING') {
-    state.phase = 'bankrupt';
-    state.runHistory.push(
-      `爆仓：Risk ${state.risk}/${state.maxRisk}，最后一次选择 ${getDayChoiceLabel(state.lastDayChoice)}。`
-    );
-    state.combo.eventLog.push(
-      `最后一次选择：${getDayChoiceLabel(state.lastDayChoice)}。`
-    );
+    const failed = applyRunFailureConditions(state);
+    state.canResolveIntent = false;
+    if (failed) {
+      state.runHistory.push(
+        `爆仓：Risk ${state.risk}/${state.maxRisk}，最后一次选择 ${getDayChoiceLabel(state.lastDayChoice)}。`
+      );
+      state.combo.eventLog.push(
+        `最后一次选择：${getDayChoiceLabel(state.lastDayChoice)}。`
+      );
+    }
   }
 
-  if (resolvedEvent.type === 'TRADE_ENDED' && state.phase === 'playing') {
-    state.phase = 'dayEnd';
+  if (
+    resolvedEvent.type === 'TRADE_ENDED' &&
+    (state.phase === 'PLAYER_TURN' || state.phase === 'RESOLVING_QUEUE')
+  ) {
+    state.phase = 'ENEMY_INTENT';
+    state.canResolveIntent = true;
+    state.intentResolvedThisTurn = false;
   }
 
   nextEvents.push(...resolveToolTriggers(state, resolvedEvent));
@@ -915,4 +941,27 @@ function getToolUseCount(state: EventGameState, tool: EventTool) {
 
 function roundToTwoDecimals(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function awardMarketPressureCash(state: EventGameState) {
+  const currentNode = state.routeMap.currentNodeId
+    ? getRouteNode(state.routeMap, state.routeMap.currentNodeId)
+    : null;
+  const act = currentNode?.act ?? 1;
+  const cashReward =
+    currentNode?.type === 'ELITE_MARKET'
+      ? act === 1
+        ? 110
+        : act === 2
+          ? 120
+          : 140
+      : currentNode?.type === 'BOSS'
+        ? 140
+        : act === 1
+          ? 45
+          : act === 2
+            ? 80
+            : 115;
+
+  gainCash(state, cashReward, '击穿奖励');
 }

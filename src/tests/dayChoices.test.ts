@@ -5,7 +5,7 @@ import { createTestEventGameState, playCard } from '../game/playCard';
 
 function createDayEndState() {
   return createTestEventGameState({
-    phase: 'dayEnd',
+    phase: 'DAY_END',
     combo: {
       ...createTestEventGameState().combo,
       comboCount: 4,
@@ -34,13 +34,15 @@ describe('day-end greed choices', () => {
 
   it('cash out locks 70% floatingProfit and records history', () => {
     const state = createDayEndState();
+    const cashBefore = state.cash;
 
     applyDayChoice(state, 'cashOut');
 
     expect(state.lockedProfit).toBe(70);
+    expect(state.cash).toBe(cashBefore + 70);
     expect(state.combo.currentChainProfit).toBe(30);
     expect(state.risk).toBe(0);
-    expect(state.phase).toBe('playing');
+    expect(state.phase).toBe('PLAYER_TURN');
     expect(state.day).toBe(2);
     expect(state.runHistory.at(-1)).toContain('止盈');
     expect(state.lastDayChoice).toBe('cashOut');
@@ -55,7 +57,7 @@ describe('day-end greed choices', () => {
     expect(state.combo.comboCount).toBe(2);
     expect(state.combo.comboMultiplier).toBe(1.16);
     expect(state.profitMultiplier).toBe(1.2);
-    expect(state.phase).toBe('playing');
+    expect(state.phase).toBe('PLAYER_TURN');
     expect(state.runHistory.at(-1)).toContain('继续持有');
   });
 
@@ -91,7 +93,7 @@ describe('day-end greed choices', () => {
 
     applyDayChoice(state, 'continueTrading');
 
-    expect(state.phase).toBe('playing');
+    expect(state.phase).toBe('PLAYER_TURN');
     expect(state.day).toBe(1);
     expect(state.risk).toBe(35);
     expect(state.combo.currentChainProfit).toBe(floatingBefore);
@@ -108,7 +110,7 @@ describe('day-end greed choices', () => {
     state.hand = [getTestCard('test-card-margin-add')];
     const afterRiskCard = playCard(state, 'test-card-margin-add');
 
-    expect(afterRiskCard.phase).toBe('bankrupt');
+    expect(afterRiskCard.phase).toBe('RUN_LOST');
     expect(afterRiskCard.lastDayChoice).toBe('leverage');
     expect(afterRiskCard.runHistory.at(-1)).toContain('最后一次选择 加杠杆');
   });

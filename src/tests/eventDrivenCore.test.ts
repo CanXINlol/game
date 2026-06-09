@@ -112,7 +112,7 @@ describe('event-driven core', () => {
     const log = state.combo.eventLog.join('\n');
 
     expect(state.risk).toBeGreaterThanOrEqual(20);
-    expect(state.phase).toBe('bankrupt');
+    expect(state.phase).toBe('RUN_LOST');
     expect(log).toContain('触发爆仓警告');
   });
 
@@ -129,7 +129,7 @@ describe('event-driven core', () => {
     const log = nextState.combo.eventLog.join('\n');
 
     expect(nextState.marketPressure.hp).toBe(0);
-    expect(nextState.phase).toBe('reward');
+    expect(nextState.phase).toBe('REWARD');
     expect(nextState.rewardChoices).toHaveLength(3);
     expect(log).toContain('被击穿');
     expect(log).toContain('奖励掉落');

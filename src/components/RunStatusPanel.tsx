@@ -1,10 +1,15 @@
 import type { GameStatus } from '../store/gameStore';
+import { localizeGamePhase } from '../game/localization';
 
 export function RunStatusPanel(props: {
   gameStatus: GameStatus;
   day: number;
   floatingProfit: number;
   lockedProfit: number;
+  cash: number;
+  bossInsuranceStatus: string;
+  act: number;
+  routeNodeCount: number;
   profitMultiplier: number;
   risk: number;
   maxRisk: number;
@@ -13,36 +18,50 @@ export function RunStatusPanel(props: {
 }) {
   return (
     <section className="panel run-status-panel">
-      <p className="section-label">RunStatus</p>
+      <p className="section-label">局内状态</p>
       <dl className="status-bar event-status-bar">
         <div>
-          <dt>Status</dt>
+          <dt>阶段</dt>
           <dd>{formatStatus(props.gameStatus)}</dd>
         </div>
         <div>
-          <dt>Day</dt>
+          <dt>交易日</dt>
           <dd>{props.day}</dd>
         </div>
         <div>
-          <dt>AP</dt>
+          <dt>幕 / 进度</dt>
+          <dd>
+            第 {props.act} 幕 / 已过 {props.routeNodeCount} 节点
+          </dd>
+        </div>
+        <div>
+          <dt>现金</dt>
+          <dd>{props.cash.toFixed(1)}</dd>
+        </div>
+        <div>
+          <dt>Boss 保险</dt>
+          <dd>{props.bossInsuranceStatus}</dd>
+        </div>
+        <div>
+          <dt>行动点</dt>
           <dd>
             {props.ap} / {props.maxAp}
           </dd>
         </div>
         <div>
-          <dt>FloatingProfit</dt>
+          <dt>浮盈</dt>
           <dd>{props.floatingProfit.toFixed(1)}</dd>
         </div>
         <div>
-          <dt>LockedProfit</dt>
+          <dt>锁定收益</dt>
           <dd>{props.lockedProfit.toFixed(1)}</dd>
         </div>
         <div>
-          <dt>Profit x</dt>
+          <dt>收益倍率</dt>
           <dd>x{props.profitMultiplier.toFixed(2)}</dd>
         </div>
         <div>
-          <dt>Risk / MaxRisk</dt>
+          <dt>风险 / 最大风险</dt>
           <dd>
             {props.risk.toFixed(1)} / {props.maxRisk}
           </dd>
@@ -53,14 +72,5 @@ export function RunStatusPanel(props: {
 }
 
 function formatStatus(status: GameStatus) {
-  const labels: Record<GameStatus, string> = {
-    start: '等待开局',
-    playing: '连续打牌中',
-    dayEnd: '交易结束',
-    reward: '选择奖励',
-    postReward: '奖励已领取，等待下一步',
-    bankrupt: '爆仓'
-  };
-
-  return labels[status];
+  return localizeGamePhase(status);
 }

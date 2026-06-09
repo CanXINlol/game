@@ -1,15 +1,16 @@
 import { getComboMultiplier } from './combo';
 import { discardContinuousTurn, drawFromContinuousDeck } from './deck';
+import { gainCash } from './economy';
 import {
-  TEST_EVENT_CARDS,
-  TEST_EVENT_TOOLS,
   type EventCard,
   type EventTool
 } from './effects';
 import { FORMAL_EVENT_CARDS, FORMAL_EVENT_TOOLS } from './formalContent';
-import { createMarketPressureByIndex, type MarketPressure } from './marketPressure';
+import { createMarketPressureByIndex } from './marketPressure';
 import type { EventGameState } from './playCard';
+import { getRouteNode } from './routeMap';
 import { createRng, type Rng } from './rng';
+import type { EventCardRole } from './types';
 import { getCardUpgradePreview, upgradeCard } from './upgrades';
 
 export type RewardKind =
@@ -19,6 +20,7 @@ export type RewardKind =
   | 'REMOVE_CARD'
   | 'REDUCE_RISK'
   | 'LOCK_PROFIT'
+  | 'GAIN_CASH'
   | 'INITIAL_COMBO'
   | 'SKIP';
 
@@ -29,6 +31,8 @@ export interface RewardOption {
   description: string;
   cardId?: string;
   cardName?: string;
+  cardRole?: EventCardRole;
+  cardArchetype?: string;
   toolId?: string;
   toolName?: string;
   value?: number;
@@ -40,20 +44,6 @@ export interface RewardApplyResult {
 
 const REWARD_OPTION_COUNT = 3;
 const EVENT_HAND_SIZE = 5;
-
-const REWARD_CARD_IDS = [
-  'formal-tech-003',
-  'formal-consumer-006',
-  'formal-medical-005',
-  'formal-finance-003'
-] as const;
-
-const REWARD_TOOL_IDS = [
-  'formal-tool-chive-notebook',
-  'formal-tool-limit-up-calculator',
-  'test-tool-quant-terminal',
-  'test-tool-limit-calculator'
-] as const;
 
 export function createRewardSeed(state: EventGameState) {
   return `${state.seed}-reward-${state.rewardsTakenCount}`;
@@ -90,6 +80,8 @@ export function applyRewardChoice(
       return applyReduceRiskReward(state, reward);
     case 'LOCK_PROFIT':
       return applyLockProfitReward(state, reward);
+    case 'GAIN_CASH':
+      return applyGainCashReward(state, reward);
     case 'INITIAL_COMBO':
       return applyInitialComboReward(state, reward);
     case 'SKIP':
@@ -116,7 +108,13 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
   state.marketPressureIndex = nextIndex;
   state.marketPressure = nextPressure;
   state.encounterTurn = 0;
-  state.phase = 'playing';
+  state.currentTurn = 1;
+  state.currentIntentId = nextPressure.intent.id;
+  state.lastResolvedIntentId = null;
+  state.intentResolvedThisTurn = false;
+  state.canResolveIntent = false;
+  state.encounterStatus = 'ACTIVE';
+  state.phase = 'PLAYER_TURN';
   state.rewardChoices = [];
   state.ap = state.maxAp;
   state.actionPoints = state.ap;
@@ -155,7 +153,7 @@ function drawOpeningHand(state: EventGameState) {
 }
 
 export function enterDayEndAfterReward(state: EventGameState): EventGameState {
-  state.phase = 'dayEnd';
+  state.phase = 'DAY_END';
   state.rewardChoices = [];
   state.combo.eventLog.push('奖励已领取，进入日终选择。');
   return state;
@@ -166,12 +164,27 @@ function buildRewardCandidates(state: EventGameState, rng: Rng): RewardOption[] 
   const rewardIndex = state.rewardsTakenCount;
 
   candidates.push(createAddCardReward(state, rng, rewardIndex));
-  candidates.push(createUpgradeCardReward(state, rng, rewardIndex));
-  candidates.push(createAddToolReward(state, rng, rewardIndex));
-  candidates.push(createRemoveCardReward(state, rng, rewardIndex));
-  candidates.push(createReduceRiskReward(rewardIndex));
-  candidates.push(createLockProfitReward(state, rewardIndex));
-  candidates.push(createInitialComboReward(rewardIndex));
+  const nodeType = getCurrentRewardNodeType(state);
+
+  if (nodeType === 'ELITE_MARKET' || nodeType === 'BOSS') {
+    candidates.push(createAddToolReward(state, rng, rewardIndex));
+    candidates.push(createUpgradeCardReward(state, rng, rewardIndex));
+    candidates.push(createGainCashReward(rewardIndex, nodeType === 'BOSS' ? 100 : 60));
+  } else if (nodeType === 'NORMAL_MARKET') {
+    candidates.push(createReduceRiskReward(rewardIndex, 8));
+    candidates.push(createGainCashReward(rewardIndex, 25));
+    candidates.push(createLockProfitReward(state, rewardIndex));
+  } else if (nodeType === 'RISK_CONTROL') {
+    candidates.push(createRemoveCardReward(state, rng, rewardIndex));
+    candidates.push(createUpgradeCardReward(state, rng, rewardIndex));
+    candidates.push(createReduceRiskReward(rewardIndex, 15));
+    candidates.push(createLockProfitReward(state, rewardIndex));
+  } else {
+    candidates.push(createAddToolReward(state, rng, rewardIndex));
+    candidates.push(createRemoveCardReward(state, rng, rewardIndex));
+    candidates.push(createReduceRiskReward(rewardIndex, 15));
+    candidates.push(createInitialComboReward(rewardIndex));
+  }
 
   return candidates.filter((item): item is RewardOption => item !== null);
 }
@@ -181,24 +194,25 @@ function createAddCardReward(
   rng: Rng,
   rewardIndex: number
 ): RewardOption | null {
-  const availableCards = REWARD_CARD_IDS.filter(
-    (cardId) => !getDeckCards(state).some((card) => card.id.startsWith(cardId))
+  const availableCards = getTieredRewardCards(state).filter(
+    (card) => !getDeckCards(state).some((deckCard) => deckCard.id.startsWith(card.id))
   );
 
   if (availableCards.length === 0) {
     return null;
   }
 
-  const cardId = rng.pick(availableCards);
-  const card = getCardTemplate(cardId);
+  const card = pickRewardCard(state, availableCards, rng);
 
   return {
-    id: `reward-${rewardIndex}-add-card-${cardId}`,
+    id: `reward-${rewardIndex}-add-card-${card.id}`,
     kind: 'ADD_CARD',
     title: `新牌：${card.name}`,
     description: `将 ${card.name} 加入 drawPile，强化当前构筑方向。`,
-    cardId,
-    cardName: card.name
+    cardId: card.id,
+    cardName: card.name,
+    cardRole: card.cardRole,
+    cardArchetype: card.archetype
   };
 }
 
@@ -232,24 +246,22 @@ function createAddToolReward(
   rewardIndex: number
 ): RewardOption | null {
   const ownedToolIds = new Set(state.tools.map((tool) => tool.id));
-  const availableTools = REWARD_TOOL_IDS.filter((toolId) => !ownedToolIds.has(toolId));
+  const availableTools = getTieredRewardTools(state).filter(
+    (tool) => !ownedToolIds.has(tool.id)
+  );
 
   if (availableTools.length === 0) {
     return null;
   }
 
-  const toolId = rng.pick(availableTools);
-  const tool = getToolTemplate(toolId);
+  const tool = rng.pick(availableTools);
 
   return {
-    id: `reward-${rewardIndex}-add-tool-${toolId}`,
+    id: `reward-${rewardIndex}-add-tool-${tool.id}`,
     kind: 'ADD_TOOL',
-    title: toolId === 'test-tool-quant-terminal' ? '量化插件' : `工具：${tool.name}`,
-    description:
-      toolId === 'test-tool-quant-terminal'
-        ? '获得工具“量化终端”，复制牌后抽牌并 combo +1。'
-        : `${tool.description}`,
-    toolId,
+    title: `工具：${tool.name}`,
+    description: `${tool.description}`,
+    toolId: tool.id,
     toolName: tool.name
   };
 }
@@ -277,13 +289,23 @@ function createRemoveCardReward(
   };
 }
 
-function createReduceRiskReward(rewardIndex: number): RewardOption {
+function createReduceRiskReward(rewardIndex: number, value = 15): RewardOption {
   return {
     id: `reward-${rewardIndex}-reduce-risk`,
     kind: 'REDUCE_RISK',
     title: '风控休息',
-    description: 'Risk -15，为下一轮 combo 腾出风险空间。',
-    value: 15
+    description: `Risk -${value}，为下一轮 combo 腾出风险空间。`,
+    value
+  };
+}
+
+function createGainCashReward(rewardIndex: number, value: number): RewardOption {
+  return {
+    id: `reward-${rewardIndex}-gain-cash-${value}`,
+    kind: 'GAIN_CASH',
+    title: '现金奖励',
+    description: `获得 ${value} 现金，用于商店和风控室。`,
+    value
   };
 }
 
@@ -314,7 +336,7 @@ function createInitialComboReward(rewardIndex: number): RewardOption {
 }
 
 function applyAddCardReward(state: EventGameState, reward: RewardOption): RewardApplyResult {
-  const template = getCardTemplate(reward.cardId ?? 'test-card-hot-rotation');
+  const template = getCardTemplate(reward.cardId ?? FORMAL_EVENT_CARDS[0].id);
   const card = cloneCardForDeck(template, `${template.id}-reward-${state.rewardsTakenCount}`);
 
   state.drawPile.push(card);
@@ -344,7 +366,7 @@ function applyUpgradeCardReward(
 }
 
 function applyAddToolReward(state: EventGameState, reward: RewardOption): RewardApplyResult {
-  const toolId = reward.toolId ?? 'test-tool-quant-terminal';
+  const toolId = reward.toolId ?? FORMAL_EVENT_TOOLS[0].id;
   const template = getToolTemplate(toolId);
 
   if (state.tools.some((tool) => tool.id === template.id)) {
@@ -409,6 +431,19 @@ function applyLockProfitReward(
   };
 }
 
+function applyGainCashReward(
+  state: EventGameState,
+  reward: RewardOption
+): RewardApplyResult {
+  const amount = reward.value ?? 15;
+  gainCash(state, amount, '奖励现金');
+  state.rewardsTakenCount += 1;
+
+  return {
+    message: `奖励生效：现金 +${amount}。`
+  };
+}
+
 function applyInitialComboReward(
   state: EventGameState,
   reward: RewardOption
@@ -423,27 +458,11 @@ function applyInitialComboReward(
 }
 
 function applySkipReward(state: EventGameState): RewardApplyResult {
-  const floatingProfit = state.combo.currentChainProfit;
-
-  if (floatingProfit > 0) {
-    const locked = roundToTwoDecimals(floatingProfit * 0.1);
-    state.lockedProfit = roundToTwoDecimals(state.lockedProfit + locked);
-    state.combo = {
-      ...state.combo,
-      currentChainProfit: roundToTwoDecimals(floatingProfit - locked)
-    };
-    state.rewardsTakenCount += 1;
-
-    return {
-      message: `跳过奖励：锁定 ${locked} 浮盈，保持牌组纯度。`
-    };
-  }
-
-  state.risk = Math.max(0, roundToTwoDecimals(state.risk - 5));
+  gainCash(state, 15, '跳过奖励补偿');
   state.rewardsTakenCount += 1;
 
   return {
-    message: '跳过奖励：risk -5，保持牌组纯度。'
+    message: '跳过奖励：现金 +15，保持牌组纯度。'
   };
 }
 
@@ -496,10 +515,126 @@ function pickNoiseCard(cards: EventCard[], rng: Rng) {
   return rng.pick(lowRankCards);
 }
 
-function getCardTemplate(cardId: string) {
-  const card = [...FORMAL_EVENT_CARDS, ...TEST_EVENT_CARDS].find(
-    (item) => item.id === cardId
+function getCurrentRewardNodeType(state: EventGameState) {
+  const node = state.routeMap.currentNodeId
+    ? getRouteNode(state.routeMap, state.routeMap.currentNodeId)
+    : null;
+
+  return node?.type ?? 'NORMAL_MARKET';
+}
+
+function getCurrentAct(state: EventGameState) {
+  return state.routeMap.currentAct;
+}
+
+function getTieredRewardCards(state: EventGameState) {
+  const act = getCurrentAct(state);
+
+  if (act === 1) {
+    return FORMAL_EVENT_CARDS.filter((card) => {
+      if (card.cardType === 'COPY' || card.cardType === 'LEVERAGE') return false;
+      if (card.cardType === 'FINISHER') return false;
+      if (card.rank >= 9) return false;
+      return (
+        card.cardRole === 'STARTER' ||
+        card.cardType === 'BUY' ||
+        card.cardType === 'DRAW' ||
+        card.cardType === 'CASH_OUT' ||
+        card.cardType === 'CHASE' ||
+        card.cardType === 'DIP_BUY' ||
+        card.cardType === 'SECTOR'
+      );
+    });
+  }
+
+  if (act === 2) {
+    return FORMAL_EVENT_CARDS.filter((card) => {
+      if (card.cardType === 'FINISHER') return false;
+      return (
+        card.cardType === 'COPY' ||
+        card.cardType === 'LEVERAGE' ||
+        card.cardType === 'RISK' ||
+        card.cardType === 'CHASE' ||
+        card.cardType === 'DRAW' ||
+        card.cardType === 'BUY' ||
+        card.cardType === 'CASH_OUT' ||
+        card.rank >= 7
+      );
+    });
+  }
+
+  return FORMAL_EVENT_CARDS.filter(
+    (card) =>
+      card.cardType === 'FINISHER' ||
+      card.cardType === 'LEVERAGE' ||
+      card.rank >= 8 ||
+      card.cardRole === 'PAYOFF'
   );
+}
+
+function getTieredRewardTools(state: EventGameState) {
+  const act = getCurrentAct(state);
+
+  if (act === 1) {
+    return FORMAL_EVENT_TOOLS.filter(
+      (tool) =>
+        tool.trigger.type === 'SECTOR_TRIGGERED' ||
+        tool.trigger.type === 'RISK_GAINED' ||
+        tool.trigger.type === 'CASH_OUT'
+    );
+  }
+
+  if (act === 2) {
+    return FORMAL_EVENT_TOOLS.filter(
+      (tool) =>
+        tool.trigger.type === 'LIMIT_UP' ||
+        tool.trigger.type === 'LEVERAGE_ADDED' ||
+        tool.trigger.type === 'RISK_GAINED' ||
+        tool.trigger.type === 'CARD_COPIED' ||
+        tool.trigger.type === 'SECTOR_TRIGGERED'
+    );
+  }
+
+  return FORMAL_EVENT_TOOLS;
+}
+
+function pickRewardCard(
+  state: EventGameState,
+  cards: EventCard[],
+  rng: Rng
+) {
+  const nodeType = getCurrentRewardNodeType(state);
+
+  if (nodeType === 'BOSS') {
+    const finisherCards = cards.filter((card) => card.cardType === 'FINISHER');
+
+    if (finisherCards.length > 0) {
+      return rng.pick(finisherCards);
+    }
+
+    const bossCards = cards.filter(
+      (card) => card.cardType === 'FINISHER' || card.rank >= 8
+    );
+
+    if (bossCards.length > 0) {
+      return rng.pick(bossCards);
+    }
+  }
+
+  if (nodeType === 'ELITE_MARKET') {
+    const eliteCards = cards.filter((card) => card.rank >= 7);
+
+    if (eliteCards.length > 0) {
+      return rng.pick(eliteCards);
+    }
+  }
+
+  const normalCards = cards.filter((card) => card.rank <= 7);
+  return rng.pick(normalCards.length > 0 ? normalCards : cards);
+}
+
+function getCardTemplate(cardId: string) {
+  const card = FORMAL_EVENT_CARDS.find((item) => item.id === cardId);
 
   if (!card) {
     throw new Error(`Unknown reward card template: ${cardId}`);
@@ -509,9 +644,7 @@ function getCardTemplate(cardId: string) {
 }
 
 function getToolTemplate(toolId: string) {
-  const tool = [...FORMAL_EVENT_TOOLS, ...TEST_EVENT_TOOLS].find(
-    (item) => item.id === toolId
-  );
+  const tool = FORMAL_EVENT_TOOLS.find((item) => item.id === toolId);
 
   if (!tool) {
     throw new Error(`Unknown reward tool template: ${toolId}`);
@@ -566,12 +699,8 @@ function roundToTwoDecimals(value: number) {
 }
 
 export function getRewardPhaseLabel(phase: EventGameState['phase']) {
-  if (phase === 'reward') {
+  if (phase === 'REWARD') {
     return '选择奖励';
-  }
-
-  if (phase === 'postReward') {
-    return '奖励已领取';
   }
 
   return null;
