@@ -1,522 +1,399 @@
+﻿import { getStockCard, NOISE_GLITCH_CARD, STOCK_CARD_BY_ID } from '../data/stockCards';
+import { applyBossPhaseModifiers, getEffectiveTargetProfit, updateBossPhase } from './bosses';
+import { finishEncounterReward, handleBankruptcy } from './encounters';
+import { recordPeakProfit } from './telemetry';
 import {
-  createCardEffectEvents,
-  TEST_EVENT_CARDS,
-  TEST_EVENT_TOOLS,
-  type EventCard,
-  type EventTool
-} from './effects';
-import { getTurboturnMultiplier } from './combo';
-import { createTraderRunConfig } from './traders';
-import {
-  createGameEvent,
-  createInitialComboState,
-  type ComboState,
-  type GameEvent,
-  type GameEventType
-} from './events';
-import {
-  aggregateChainSummary,
-  type CashTransaction,
-  type ChainSummary
-} from './feedback';
-import { EventQueue } from './eventQueue';
-import {
-  createTestMarketPressure,
-  type MarketPressure
-} from './marketPressure';
-import { type RewardOption } from './rewards';
-import { createRouteMap, type RouteMapState } from './routeMap';
-import type { ShopState } from './shop';
-import type { EventCardCost } from './types';
+  applyApOverdraft,
+  applyFinalStopIfNeeded,
+  applyLockBonus,
+  applyOldHandCup,
+  applyToolOnChainResult,
+  applyTraderAndToolRiskModifier,
+  canOverdraftAp,
+  getToolProfitBonus,
+  getTraderProfitMultiplier,
+  markInsuranceUsed
+} from './tools';
+import type { Encounter, Run, TradeCard, TradeChainResult, TradeChainStep } from './types';
 
-export type GamePhase =
-  | 'ROUTE_SELECT'
-  | 'ENCOUNTER_START'
-  | 'PLAYER_TURN'
-  | 'RESOLVING_QUEUE'
-  | 'ENEMY_INTENT'
-  | 'REWARD'
-  | 'SHOP'
-  | 'REST'
-  | 'DAY_END'
-  | 'RUN_WON'
-  | 'RUN_LOST';
+export const MAX_CHAIN_CARDS = 3;
 
-export type EventGamePhase = GamePhase;
-
-export type EncounterStatus = 'ACTIVE' | 'CLEARED' | 'LOST';
-
-export interface ConsumableInsurance {
-  id: string;
-  name: string;
-  description: string;
+interface ChainContext {
+  run: Run;
+  encounter: Encounter;
+  cardIds: string[];
 }
 
-export interface EventGameState {
-  seed: string;
-  traderId: string | null;
-  traderName: string | null;
-  traderTitle: string | null;
-  traderPassive: string | null;
-  traderRewardBias: string | null;
-  traderDifficulty: string | null;
-  servicePriceMultiplier: number;
-  traderPassiveUsesThisTurn: Record<string, number>;
-  day: number;
-  hand: EventCard[];
-  drawPile: EventCard[];
-  discardPile: EventCard[];
-  playedCardsThisTurn: EventCard[];
-  removedCards: EventCard[];
-  ap: number;
-  maxAp: number;
-  actionPoints: number;
-  maxActionPoints: number;
-  baseMaxAp: number;
-  bonusApGainsThisTurn: number;
-  maxBonusApGainsPerTurn: number;
-  bonusDrawsThisTurn: number;
-  maxBonusDrawsPerTurn: number;
-  copiesThisTurn: number;
-  maxCopiesPerTurn: number;
-  risk: number;
-  maxRisk: number;
-  baseMaxRisk: number;
-  profitMultiplier: number;
-  nextProfitMultiplier: number;
-  nextApBonus: number;
-  nextMaxRiskPenalty: number;
-  cash: number;
+interface MutableChainState {
+  floatingProfit: number;
   lockedProfit: number;
-  cardsPurchasedCount: number;
-  toolsPurchasedCount: number;
-  cardsRemovedCount: number;
-  shopVisitCount: number;
-  nodeActionUsed: boolean;
-  shopRefreshUsed: boolean;
-  hasBossInsurance: boolean;
-  bossInsuranceUsed: boolean;
-  consumables: ConsumableInsurance[];
-  hotSector: string;
-  combo: ComboState;
-  marketPressure: MarketPressure;
-  marketPressureIndex: number;
-  tools: EventTool[];
-  phase: EventGamePhase;
-  currentTurn: number;
-  intentResolvedThisTurn: boolean;
-  currentIntentId: string;
-  lastResolvedIntentId: string | null;
-  canResolveIntent: boolean;
-  encounterStatus: EncounterStatus;
-  routeMap: RouteMapState;
-  shop: ShopState;
-  rewardChoices: RewardOption[];
-  rewardsTakenCount: number;
-  rewardRarityBonus: number;
-  nextInitialCombo: number;
-  encounterTurn: number;
-  intentProfitMultiplier: number;
-  intentRiskMultiplier: number;
-  weakenedSector: string | null;
-  lastPlayedCost: EventCardCost | null;
-  turboturnStep: number;
-  turboturnMultiplier: number;
-  cardsDrawnThisTurn: number;
-  fatigueCount: number;
-  reshuffleCount: number;
-  runHistory: string[];
-  lastDayChoice: string | null;
-  lastPlayedCard: EventCard | null;
-  lastTurnSummary: string | null;
-  resolvedEventTypes: GameEventType[];
-  resolvedEventsThisAction: GameEvent[];
-  cashTransactions: CashTransaction[];
-  cashTransactionsThisAction: CashTransaction[];
-  lastChainSummary: ChainSummary;
-  toolUseCounts: Record<string, number>;
-  triggeredComboMilestones: Record<string, number[]>;
-  nextEventSeq: number;
-  createEvent(input: {
-    type: GameEventType;
-    sourceId: string;
-    sourceName: string;
-    message: string;
-    value?: number;
-    meta?: Record<string, unknown>;
-    depth?: number;
-  }): GameEvent;
+  cash: number;
+  risk: number;
+  drawDelta: number;
+  apDelta: number;
+  subsequentProfitMultiplier: number;
+  nextProfitMultiplier: number;
+  nextCostReduction: number;
+  endedEncounter: boolean;
 }
 
-export function createTestEventGameState(
-  overrides: Partial<Omit<EventGameState, 'createEvent'>> = {}
-): EventGameState {
-  const testHand = TEST_EVENT_CARDS.slice(0, 8);
-  const testDrawPile = TEST_EVENT_CARDS.slice(8);
-  const state: EventGameState = {
-    seed: 'test-run',
-    traderId: null,
-    traderName: null,
-    traderTitle: null,
-    traderPassive: null,
-    traderRewardBias: null,
-    traderDifficulty: null,
-    servicePriceMultiplier: 1,
-    traderPassiveUsesThisTurn: {},
-    day: 1,
-    hand: testHand,
-    drawPile: testDrawPile,
-    discardPile: [],
-    playedCardsThisTurn: [],
-    removedCards: [],
-    ap: 3,
-    maxAp: 3,
-    actionPoints: 3,
-    maxActionPoints: 3,
-    baseMaxAp: 3,
-    bonusApGainsThisTurn: 0,
-    maxBonusApGainsPerTurn: 1,
-    bonusDrawsThisTurn: 0,
-    maxBonusDrawsPerTurn: 2,
-    copiesThisTurn: 0,
-    maxCopiesPerTurn: 1,
-    risk: 0,
-    maxRisk: 100,
-    baseMaxRisk: 100,
-    profitMultiplier: 1,
+export function canAddCardToChain(cardIds: string[]) {
+  return cardIds.length < MAX_CHAIN_CARDS;
+}
+
+export function getTradeChainTotalCost(
+  cardIds: string[],
+  cards = STOCK_CARD_BY_ID,
+  handCostPenalty = 0,
+  nextCardCostReduction = 0
+) {
+  let costReduction = nextCardCostReduction;
+
+  return cardIds.reduce((total, cardId) => {
+    const card = cards[cardId] ?? getStockCard(cardId);
+    const cost = Math.max(0, card.cost + handCostPenalty - costReduction);
+    costReduction = card.numericEffects.nextCostReduction ?? 0;
+    return total + cost;
+  }, 0);
+}
+
+export function previewTradeChain(run: Run, cardIds = run.tradeChain.selectedCardIds) {
+  if (!run.currentEncounter) {
+    throw new Error('No active encounter.');
+  }
+  return resolveTradeChain({ run, encounter: run.currentEncounter, cardIds });
+}
+
+export function executeTradeChain(run: Run): Run {
+  const selectedCardIds = run.tradeChain.selectedCardIds;
+  if (selectedCardIds.length === 0 || run.status !== 'PLAYER_TURN' || !run.currentEncounter) {
+    return run;
+  }
+
+  const result = previewTradeChain(run, selectedCardIds);
+  if (result.totalCost > run.ap && !canOverdraftAp(run, result.totalCost)) {
+    return { ...run, turnSummary: ['AP 不足，无法执行这条交易链。'] };
+  }
+
+  const played = [...selectedCardIds];
+  const persistentPlayed = played.filter((cardId) => cardId !== NOISE_GLITCH_CARD.id);
+  const handAfterPlay = removePlayedCards(run.hand, played);
+  const drawn = drawCards(
+    { drawPile: run.drawPile, discardPile: run.discardPile, hand: handAfterPlay },
+    result.drawDelta
+  );
+
+  let nextEncounter: Encounter = {
+    ...run.currentEncounter,
+    floatingProfit: result.bankrupt ? 0 : result.floatingProfitAfter,
+    lockedProfit: result.lockedProfitAfter,
+    risk: result.riskAfter,
+    status: getPostChainEncounterStatus(run.currentEncounter, result),
+    nextTurnProfitMultiplier: 1
+  };
+
+  const finalStop = applyFinalStopIfNeeded(run, nextEncounter.risk, nextEncounter.floatingProfit);
+  if (finalStop.insuranceUsed) {
+    nextEncounter = {
+      ...nextEncounter,
+      lockedProfit: nextEncounter.lockedProfit + finalStop.lockedDelta
+    };
+  }
+
+  if (nextEncounter.boss) {
+    nextEncounter = updateBossPhase(nextEncounter);
+    nextEncounter = applyBossPhaseModifiers(run, nextEncounter);
+  }
+
+  recordPeakProfit(run, nextEncounter.floatingProfit);
+
+  const usedOverdraft = result.totalCost > run.ap;
+  let nextRun: Run = {
+    ...run,
+    cash: result.bankrupt ? run.cash : run.cash + result.cashDelta,
+    hand: drawn.hand,
+    drawPile: drawn.drawPile,
+    discardPile: [...drawn.discardPile, ...persistentPlayed],
+    currentEncounter: nextEncounter,
+    status: getPostChainRunStatus(run.currentEncounter, result),
+    ap: Math.max(0, run.ap - result.totalCost + result.apDelta),
+    tradeChain: { selectedCardIds: [], maxCards: MAX_CHAIN_CARDS, totalCost: 0, previewResult: null },
+    lastChainResult: result,
+    turnSummary: createChainSummary(result)
+  };
+
+  if (usedOverdraft) {
+    nextRun = applyApOverdraft(nextRun);
+  }
+
+  nextRun = applyOldHandCup(nextRun, nextEncounter.risk);
+  nextRun = applyToolOnChainResult(nextRun, result, selectedCardIds);
+
+  if (finalStop.insuranceUsed) {
+    nextRun = markInsuranceUsed(nextRun, 'final-stop');
+  }
+
+  if (result.bankrupt) {
+    return handleBankruptcy(nextRun, '风险触顶');
+  }
+
+  if (nextRun.status === 'REWARD') {
+    return finishEncounterReward(nextRun);
+  }
+
+  return nextRun;
+}
+
+export function resolveTradeChain(context: ChainContext): TradeChainResult {
+  if (context.cardIds.length > MAX_CHAIN_CARDS) {
+    throw new Error(`Trade chain cannot contain more than ${MAX_CHAIN_CARDS} cards.`);
+  }
+
+  const encounter = context.encounter;
+  const mutable: MutableChainState = {
+    floatingProfit: encounter.floatingProfit,
+    lockedProfit: encounter.lockedProfit,
+    cash: context.run.cash,
+    risk: encounter.risk,
+    drawDelta: 0,
+    apDelta: 0,
+    subsequentProfitMultiplier: encounter.nextTurnProfitMultiplier,
     nextProfitMultiplier: 1,
-    nextApBonus: 0,
-    nextMaxRiskPenalty: 0,
-    cash: 120,
-    lockedProfit: 0,
-    cardsPurchasedCount: 0,
-    toolsPurchasedCount: 0,
-    cardsRemovedCount: 0,
-    shopVisitCount: 0,
-    nodeActionUsed: false,
-    shopRefreshUsed: false,
-    hasBossInsurance: false,
-    bossInsuranceUsed: false,
-    consumables: [],
-    hotSector: 'TECH',
-    combo: createInitialComboState(),
-    marketPressure: createTestMarketPressure(),
-    marketPressureIndex: 0,
-    tools: [...TEST_EVENT_TOOLS],
-    phase: 'PLAYER_TURN',
-    currentTurn: 1,
-    intentResolvedThisTurn: false,
-    currentIntentId: createTestMarketPressure().intent.id,
-    lastResolvedIntentId: null,
-    canResolveIntent: false,
-    encounterStatus: 'ACTIVE',
-    routeMap: createRouteMap('test-run'),
-    shop: {
-      id: 'empty-shop',
-      sections: { cards: [], tools: [], insurance: [], services: [] },
-      items: [],
-      refreshCount: 0
-    },
-    rewardChoices: [] as RewardOption[],
-    rewardsTakenCount: 0,
-    rewardRarityBonus: 0,
-    nextInitialCombo: 0,
-    encounterTurn: 0,
-    intentProfitMultiplier: 1,
-    intentRiskMultiplier: 1,
-    weakenedSector: null,
-    lastPlayedCost: null,
-    turboturnStep: 0,
-    turboturnMultiplier: 1,
-    cardsDrawnThisTurn: 0,
-    fatigueCount: 0,
-    reshuffleCount: 0,
-    runHistory: [],
-    lastDayChoice: null,
-    lastPlayedCard: null,
-    lastTurnSummary: null,
-    resolvedEventTypes: [],
-    resolvedEventsThisAction: [],
-    cashTransactions: [],
-    cashTransactionsThisAction: [],
-    lastChainSummary: aggregateChainSummary([]),
-    toolUseCounts: {},
-    triggeredComboMilestones: {},
-    nextEventSeq: 0,
-    createEvent(input) {
-      this.nextEventSeq += 1;
-      return createGameEvent({
-        id: `event-${this.nextEventSeq}`,
-        ...input
-      });
-    },
-    ...overrides
+    nextCostReduction: context.run.nextCardCostReduction,
+    endedEncounter: false
   };
+  const steps: TradeChainStep[] = [];
+  let sawProfitCard = false;
 
-  if (overrides.currentIntentId === undefined) {
-    state.currentIntentId = state.marketPressure.intent.id;
+  for (const [index, cardId] of context.cardIds.entries()) {
+    const card = getStockCard(cardId);
+    const isLastCard = index === context.cardIds.length - 1;
+    const isFirstProfitCard = !sawProfitCard && (card.numericEffects.floatingProfit ?? 0) > 0;
+    const step = resolveCardStep(context.run, card, mutable, encounter, isLastCard, isFirstProfitCard);
+    if ((card.numericEffects.floatingProfit ?? 0) > 0) sawProfitCard = true;
+    steps.push(step);
   }
 
-  if (overrides.routeMap === undefined) {
-    state.routeMap = createRouteMap(state.seed);
+  if (encounter.profitBonus > 0) {
+    mutable.floatingProfit += encounter.profitBonus;
   }
 
-  return state;
-}
+  const riskAfter = clamp(Math.floor(mutable.risk), 0, encounter.maxRisk);
+  const bankrupt = riskAfter >= encounter.maxRisk;
+  const floatingProfitAfter = bankrupt ? 0 : Math.floor(mutable.floatingProfit);
+  const target = getEffectiveTargetProfit(encounter);
 
-export function createFormalEventGameState(
-  overrides: Partial<Omit<EventGameState, 'createEvent'>> = {},
-  traderId = overrides.traderId ?? 'old-hand'
-): EventGameState {
-  const traderConfig = createTraderRunConfig(traderId ?? 'old-hand');
-  const maxRisk = 100 + traderConfig.maxRiskModifier;
-
-  return createTestEventGameState({
-    seed: 'formal-run',
-    traderId: traderConfig.trader.id,
-    traderName: traderConfig.trader.name,
-    traderTitle: traderConfig.trader.title,
-    traderPassive: traderConfig.trader.passive,
-    traderRewardBias: traderConfig.trader.rewardBias,
-    traderDifficulty: traderConfig.trader.difficulty,
-    servicePriceMultiplier: traderConfig.servicePriceMultiplier,
-    hand: cloneCards(traderConfig.deck.slice(0, 5)),
-    drawPile: cloneCards(traderConfig.deck.slice(5)),
-    discardPile: [],
-    removedCards: [],
-    tools: cloneTools(traderConfig.tools),
-    cash: traderConfig.cash,
-    maxRisk,
-    baseMaxRisk: maxRisk,
-    marketPressureIndex: 0,
-    encounterTurn: 0,
-    ...overrides
-  });
-}
-
-export function playCard(state: EventGameState, cardId: string): EventGameState {
-  if (state.phase !== 'PLAYER_TURN') {
-    return state;
-  }
-
-  const card = state.hand.find((item) => item.id === cardId);
-
-  if (!card || card.cost > state.actionPoints) {
-    return state;
-  }
-
-  const nextState = cloneEventGameState(state);
-  nextState.resolvedEventsThisAction = [];
-  nextState.cashTransactionsThisAction = [];
-  const previousCard = nextState.lastPlayedCard;
-  nextState.hand = nextState.hand.filter((item) => item.id !== cardId);
-  nextState.playedCardsThisTurn = [...nextState.playedCardsThisTurn, card];
-  nextState.actionPoints = Math.max(0, nextState.actionPoints - card.cost);
-  nextState.ap = nextState.actionPoints;
-
-  const queue = new EventQueue();
-  nextState.phase = 'RESOLVING_QUEUE';
-  queue.enqueue(
-    nextState.createEvent({
-      type: 'CARD_PLAYED',
-      sourceId: card.id,
-      sourceName: card.name,
-      message: `打出 ${card.name}。`,
-      meta: {
-        sector: card.sector,
-        rank: card.rank,
-        cost: card.cost,
-        cardRole: card.cardRole
-      }
-    })
-  );
-
-  for (const event of createTurboturnEvents(nextState, card)) {
-    queue.enqueue(event);
-  }
-
-  for (const event of createCardEffectEvents(card, nextState, { previousCard })) {
-    queue.enqueue(event);
-  }
-
-  queue.resolveAll(nextState);
-  nextState.lastChainSummary = aggregateChainSummary(
-    nextState.resolvedEventsThisAction,
-    nextState.cashTransactionsThisAction
-  );
-  if (nextState.phase === 'RESOLVING_QUEUE') {
-    nextState.phase = 'PLAYER_TURN';
-  }
-  nextState.lastPlayedCard = card;
-  endTradeIfNoPlayableCards(nextState);
-
-  return nextState;
-}
-
-function createTurboturnEvents(
-  state: EventGameState,
-  card: EventCard
-): GameEvent[] {
-  const previousCost = state.lastPlayedCost;
-  const isOpeningZero = previousCost === null && card.cost === 0;
-  const isRisingStep = previousCost !== null && card.cost === previousCost + 1;
-  const isRestart = previousCost !== null && card.cost === 0;
-
-  if (isOpeningZero || isRestart) {
-    state.turboturnStep = 1;
-  } else if (isRisingStep) {
-    state.turboturnStep += 1;
-  } else {
-    state.turboturnStep = 0;
-  }
-
-  state.lastPlayedCost = card.cost;
-  state.turboturnMultiplier = getTurboturnMultiplier(state.turboturnStep);
-
-  const events: GameEvent[] = [];
-
-  if (state.turboturnStep > 0) {
-    events.push(
-      state.createEvent({
-        type: 'TURBOTURN_STEP',
-        sourceId: card.id,
-        sourceName: card.name,
-        message: `${card.name} 推进 Turboturn：${state.turboturnStep} 段，收益 x${state.turboturnMultiplier.toFixed(2)}。`,
-        value: state.turboturnStep,
-        meta: {
-          cost: card.cost,
-          turboturnMultiplier: state.turboturnMultiplier
-        }
-      })
-    );
-  }
-
-  if (state.turboturnStep >= 4 && card.cost === 3) {
-    events.push(
-      state.createEvent({
-        type: 'TURBOTURN_COMPLETE',
-        sourceId: card.id,
-        sourceName: card.name,
-        message: '完整 Turboturn：0 → 1 → 2 → 3 成立，combo +1 并获得 10 收益。',
-        value: state.turboturnStep
-      }),
-      state.createEvent({
-        type: 'COMBO_GAINED',
-        sourceId: card.id,
-        sourceName: card.name,
-        message: `${card.name} 完整 Turboturn 奖励：combo +1。`,
-        value: 1
-      }),
-      state.createEvent({
-        type: 'PROFIT_GAINED',
-        sourceId: card.id,
-        sourceName: card.name,
-        message: `${card.name} 完整 Turboturn 奖励：获得 10 收益。`,
-        value: 10,
-        meta: { sector: card.sector }
-      })
-    );
-  }
-
-  return events;
-}
-
-function endTradeIfNoPlayableCards(state: EventGameState) {
-  if (state.phase !== 'PLAYER_TURN') {
-    return;
-  }
-
-  const hasAffordableCard = state.hand.some((card) => card.cost <= state.actionPoints);
-
-  if (hasAffordableCard) {
-    return;
-  }
-
-  state.phase = 'ENEMY_INTENT';
-  state.canResolveIntent = true;
-  state.intentResolvedThisTurn = false;
-  state.combo.eventLog.push('没有可打出的牌，进入敌方意图结算。');
-  state.runHistory.push('没有可打出的牌，进入敌方意图结算。');
-}
-
-function cloneCards(cards: EventCard[]): EventCard[] {
-  return cards.map((card) => ({
-    ...card,
-    tags: card.tags ? [...card.tags] : undefined,
-    effects: card.effects.map((effect) => ({ ...effect }))
-  }));
-}
-
-function cloneTools(tools: EventTool[]): EventTool[] {
-  return tools.map((tool) => ({
-    ...tool,
-    triggerEvents: tool.triggerEvents ? [...tool.triggerEvents] : undefined,
-    trigger: {
-      ...tool.trigger,
-      meta: tool.trigger.meta ? { ...tool.trigger.meta } : undefined,
-      comboThresholds: tool.trigger.comboThresholds
-        ? [...tool.trigger.comboThresholds]
-        : undefined
-    },
-    effects: tool.effects.map((effect) => ({ ...effect }))
-  }));
-}
-
-function cloneEventGameState(state: EventGameState): EventGameState {
   return {
-    ...state,
-    hand: [...state.hand],
-    drawPile: [...state.drawPile],
-    discardPile: [...state.discardPile],
-    playedCardsThisTurn: [...state.playedCardsThisTurn],
-    removedCards: [...state.removedCards],
-    traderPassiveUsesThisTurn: { ...state.traderPassiveUsesThisTurn },
-    combo: {
-      ...state.combo,
-      eventLog: [...state.combo.eventLog]
-    },
-    marketPressure: { ...state.marketPressure },
-    routeMap: cloneRouteMap(state.routeMap),
-    shop: {
-      ...state.shop,
-      sections: {
-        cards: state.shop.sections.cards.map((item) => ({ ...item })),
-        tools: state.shop.sections.tools.map((item) => ({ ...item })),
-        insurance: state.shop.sections.insurance.map((item) => ({ ...item })),
-        services: state.shop.sections.services.map((item) => ({ ...item }))
-      },
-      items: state.shop.items.map((item) => ({ ...item }))
-    },
-    tools: [...state.tools],
-    consumables: [...state.consumables],
-    rewardChoices: [...state.rewardChoices],
-    runHistory: [...state.runHistory],
-    resolvedEventTypes: [...state.resolvedEventTypes],
-    resolvedEventsThisAction: [...state.resolvedEventsThisAction],
-    cashTransactions: [...state.cashTransactions],
-    cashTransactionsThisAction: [...state.cashTransactionsThisAction],
-    lastChainSummary: { ...state.lastChainSummary, keyEvents: [...state.lastChainSummary.keyEvents] },
-    toolUseCounts: { ...state.toolUseCounts },
-    triggeredComboMilestones: Object.fromEntries(
-      Object.entries(state.triggeredComboMilestones).map(([toolId, thresholds]) => [
-        toolId,
-        [...thresholds]
-      ])
-    )
+    steps,
+    totalCost: getTradeChainTotalCost(
+      context.cardIds,
+      STOCK_CARD_BY_ID,
+      encounter.handCostPenalty,
+      context.run.nextCardCostReduction
+    ),
+    floatingProfitBefore: encounter.floatingProfit,
+    floatingProfitAfter,
+    floatingProfitDelta: floatingProfitAfter - encounter.floatingProfit,
+    lockedProfitBefore: encounter.lockedProfit,
+    lockedProfitAfter: Math.floor(mutable.lockedProfit),
+    lockedProfitDelta: Math.floor(mutable.lockedProfit) - encounter.lockedProfit,
+    cashDelta: Math.floor(mutable.cash - context.run.cash),
+    riskBefore: encounter.risk,
+    riskAfter,
+    riskDelta: riskAfter - encounter.risk,
+    drawDelta: mutable.drawDelta,
+    apDelta: mutable.apDelta,
+    reachedTarget: floatingProfitAfter >= target,
+    bankrupt,
+    endedEncounter: mutable.endedEncounter
   };
 }
 
-function cloneRouteMap(routeMap: RouteMapState): RouteMapState {
+function resolveCardStep(
+  run: Run,
+  card: TradeCard,
+  mutable: MutableChainState,
+  encounter: Encounter,
+  isLastCard: boolean,
+  isFirstProfitCard: boolean
+): TradeChainStep {
+  const cost = Math.max(0, card.cost + encounter.handCostPenalty - mutable.nextCostReduction);
+  let baseFloatingProfit = card.numericEffects.floatingProfit ?? 0;
+  baseFloatingProfit += getToolProfitBonus(run, card, mutable.risk, isFirstProfitCard);
+
+  if (card.numericEffects.profitFromRisk) {
+    baseFloatingProfit = Math.floor(mutable.risk * card.numericEffects.profitFromRisk);
+  }
+
+  const extraFloatingProfit = getConditionalExtraProfit(card, mutable, encounter, isLastCard);
+  const profitBeforeMultiplier = baseFloatingProfit + extraFloatingProfit;
+  const traderMult = getTraderProfitMultiplier(run, card);
+  const multiplier = mutable.subsequentProfitMultiplier * mutable.nextProfitMultiplier * traderMult;
+  const floatingProfitGained = Math.floor(profitBeforeMultiplier * multiplier);
+  const lockedProfitGained = applyLockBonus(
+    run,
+    getLockedProfit(card, mutable.floatingProfit + floatingProfitGained, encounter)
+  );
+  const cashGained = getCashGain(card, mutable.floatingProfit + floatingProfitGained, encounter);
+
+  mutable.floatingProfit += floatingProfitGained;
+  mutable.lockedProfit += lockedProfitGained;
+  mutable.cash += cashGained;
+  const appliedRiskDelta = applyTraderAndToolRiskModifier(run, card.riskDelta, card, encounter);
+  mutable.risk += appliedRiskDelta;
+  mutable.drawDelta += card.drawDelta;
+  mutable.apDelta += card.apDelta;
+  mutable.subsequentProfitMultiplier *= card.numericEffects.subsequentProfitMultiplier ?? 1;
+  mutable.nextProfitMultiplier = card.numericEffects.nextProfitMultiplier ?? 1;
+  mutable.nextCostReduction = card.numericEffects.nextCostReduction ?? 0;
+  mutable.endedEncounter = mutable.endedEncounter || card.numericEffects.endsEncounter === true;
+
   return {
-    ...routeMap,
-    acts: routeMap.acts.map((act) => ({
-      ...act,
-      nodes: act.nodes.map((node) => ({
-        ...node,
-        nextNodeIds: [...node.nextNodeIds]
-      }))
-    })),
-    completedNodeIds: [...routeMap.completedNodeIds],
-    availableNodeIds: [...routeMap.availableNodeIds]
+    cardId: card.id,
+    cardName: card.name,
+    cost,
+    baseFloatingProfit,
+    multiplier,
+    extraFloatingProfit,
+    floatingProfitGained,
+    cashGained,
+    lockedProfitGained,
+    riskDelta: appliedRiskDelta,
+    note: createStepNote(card, floatingProfitGained, extraFloatingProfit, multiplier)
   };
 }
+
+function getConditionalExtraProfit(
+  card: TradeCard,
+  mutable: MutableChainState,
+  encounter: Encounter,
+  isLastCard: boolean
+) {
+  const extraProfit = card.numericEffects.extraProfit ?? 0;
+  const target = getEffectiveTargetProfit(encounter);
+
+  if (extraProfit === 0 && card.id !== 'theme-ignite') return 0;
+
+  if (card.id === 'chase-limit' || card.id === 'dragon-follow') {
+    return mutable.floatingProfit > target * 0.5 ? extraProfit : 0;
+  }
+
+  if (card.id === 'theme-ignite') {
+    return mutable.floatingProfit < target ? extraProfit : 0;
+  }
+
+  if (card.id === 'dip-rebound' || card.id === 'limit-dip') {
+    const threshold = card.id === 'limit-dip' ? 40 : 50;
+    return mutable.risk >= threshold ? extraProfit : 0;
+  }
+
+  if (card.id === 'late-ignite' || card.id === 'closing-sweep') {
+    return isLastCard ? extraProfit : 0;
+  }
+
+  if (card.id === 'short-cover') {
+    return mutable.risk >= 70 ? extraProfit : 0;
+  }
+
+  return 0;
+}
+
+function getLockedProfit(card: TradeCard, currentFloatingProfit: number, encounter: Encounter) {
+  if (card.numericEffects.lockRatio) {
+    return Math.floor(currentFloatingProfit * card.numericEffects.lockRatio);
+  }
+  if (card.numericEffects.cashLock) {
+    return Math.min(card.numericEffects.cashLock, Math.floor(currentFloatingProfit));
+  }
+  if (card.id === 'capital-return') {
+    return Math.floor(encounter.lockedProfit * 0.5);
+  }
+  return 0;
+}
+
+function getCashGain(card: TradeCard, currentFloatingProfit: number, encounter: Encounter) {
+  if (card.numericEffects.cashLock) {
+    return Math.min(card.numericEffects.cashLock, Math.floor(currentFloatingProfit));
+  }
+  if (card.numericEffects.cashRatio) {
+    if (card.id === 'capital-return') {
+      return Math.floor(encounter.lockedProfit * 0.5);
+    }
+    return Math.floor(currentFloatingProfit * card.numericEffects.cashRatio);
+  }
+  return 0;
+}
+
+function getPostChainEncounterStatus(encounter: Encounter, result: TradeChainResult) {
+  if (result.bankrupt) return 'BANKRUPT';
+  if (result.endedEncounter) return 'REWARD';
+  if (result.reachedTarget || encounter.status === 'GREED_CHOICE') return 'GREED_CHOICE';
+  return 'ACTIVE';
+}
+
+function getPostChainRunStatus(encounter: Encounter, result: TradeChainResult) {
+  if (result.bankrupt) return 'RUN_LOST';
+  if (result.endedEncounter) return 'REWARD';
+  if (result.reachedTarget || encounter.status === 'GREED_CHOICE') return 'GREED_CHOICE';
+  return 'PLAYER_TURN';
+}
+
+function drawCards(piles: { drawPile: string[]; discardPile: string[]; hand: string[] }, count: number) {
+  const hand = [...piles.hand];
+  let drawPile = [...piles.drawPile];
+  let discardPile = [...piles.discardPile];
+
+  for (let index = 0; index < count; index += 1) {
+    if (drawPile.length === 0 && discardPile.length > 0) {
+      drawPile = [...discardPile];
+      discardPile = [];
+    }
+    const drawnCard = drawPile.shift();
+    if (!drawnCard) break;
+    hand.push(drawnCard);
+  }
+
+  return { drawPile, discardPile, hand };
+}
+
+function removePlayedCards(hand: string[], played: string[]) {
+  const remaining = [...hand];
+  for (const cardId of played) {
+    const index = remaining.indexOf(cardId);
+    if (index >= 0) remaining.splice(index, 1);
+  }
+  return remaining;
+}
+
+function createChainSummary(result: TradeChainResult) {
+  const targetText = result.reachedTarget ? '已达到目标线。' : '尚未达到目标线。';
+  const finalText = result.bankrupt ? '风险触顶，爆仓。' : targetText;
+  return [
+    `本次浮盈 ${formatDelta(result.floatingProfitDelta)}。`,
+    `风险 ${formatDelta(result.riskDelta)}。`,
+    finalText
+  ];
+}
+
+function createStepNote(card: TradeCard, floatingProfitGained: number, extraFloatingProfit: number, multiplier: number) {
+  const fragments = [`${card.name} 带来 ${floatingProfitGained} 浮盈`];
+  if (extraFloatingProfit > 0) fragments.push(`额外 +${extraFloatingProfit}`);
+  if (multiplier !== 1) fragments.push(`倍率 x${formatMultiplier(multiplier)}`);
+  return `${fragments.join('，')}。`;
+}
+
+function formatDelta(value: number) {
+  return value >= 0 ? `+${value}` : `${value}`;
+}
+
+function formatMultiplier(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+
+
+

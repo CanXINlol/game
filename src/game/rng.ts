@@ -1,4 +1,4 @@
-export interface Rng {
+﻿export interface Rng {
   next(): number;
   nextInt(min: number, max: number): number;
   pick<T>(array: readonly T[]): T;
@@ -68,3 +68,5 @@ function assertIntegerRange(min: number, max: number) {
     throw new Error('nextInt max must be greater than or equal to min.');
   }
 }
+
+

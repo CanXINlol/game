@@ -1,144 +1,36 @@
-import type { Tool } from '../game/types';
+﻿import type { Tool } from '../game/types';
 
 export const TOOLS: Tool[] = [
-  {
-    id: 'tool-limit-up-calculator',
-    name: '涨停板计算器',
-    category: 'GREED',
-    description: '每次选择继续持有时，下一日浮盈延续倍率额外 +0.2。',
-    effects: [{ type: 'HOLD_CARRY_BONUS', bonus: 0.2 }]
-  },
-  {
-    id: 'tool-red-candle-stamp',
-    name: '红烛印章',
-    category: 'GREED',
-    description: '每次结算时，工具收益倍率 x1.08。',
-    effects: [{ type: 'TOOL_RETURN_MULTIPLIER', multiplier: 1.08 }]
-  },
-  {
-    id: 'tool-hot-money-compass',
-    name: '游资罗盘',
-    category: 'GREED',
-    description: '每有 1 张热门板块牌，工具收益倍率 +0.04。',
-    effects: [{ type: 'HOT_SECTOR_RETURN_BONUS', bonusPerCard: 0.04 }]
-  },
-  {
-    id: 'tool-bubble-loupe',
-    name: '泡沫放大镜',
-    category: 'GREED',
-    description: '牛市时工具收益倍率 +0.15。',
-    effects: [{ type: 'MOOD_RETURN_BONUS', mood: 'BULL', bonus: 0.15 }]
-  },
-  {
-    id: 'tool-old-trader-cup',
-    name: '老股民茶杯',
-    category: 'RISK_CONTROL',
-    description: '每局第一次亏损时，自动锁定 30% 当前浮盈。',
-    effects: [{ type: 'FIRST_LOSS_LOCK_FLOATING_PROFIT', ratio: 0.3 }]
-  },
-  {
-    id: 'tool-broker-insurance',
-    name: '券商保险单',
-    category: 'RISK_CONTROL',
-    description: '第一次爆仓时不会退市，本金变为 1，清空浮盈。',
-    effects: [{ type: 'PREVENT_FIRST_BANKRUPTCY', principalAfterSave: 1 }]
-  },
-  {
-    id: 'tool-stop-loss-ruler',
-    name: '止损尺',
-    category: 'RISK_CONTROL',
-    description: '每次结算风险 -5。',
-    effects: [{ type: 'RISK_GAIN_FLAT', amount: -5 }]
-  },
-  {
-    id: 'tool-calm-bell',
-    name: '冷静铃',
-    category: 'RISK_CONTROL',
-    description: '高波动日风险 -8。',
-    effects: [{ type: 'VOLATILITY_RISK_REDUCTION', threshold: 1.15, amount: 8 }]
-  },
-  {
-    id: 'tool-industry-reports',
-    name: '行业研报库',
-    category: 'SECTOR',
-    description: '同板块组合的牌型倍率 +0.5。',
-    effects: [{ type: 'SAME_SECTOR_COMBO_BONUS', bonus: 0.5 }]
-  },
-  {
-    id: 'tool-sector-thermometer',
-    name: '板块温度计',
-    category: 'SECTOR',
-    description: '每有 1 张热门板块牌，工具收益倍率 +0.03。',
-    effects: [{ type: 'HOT_SECTOR_RETURN_BONUS', bonusPerCard: 0.03 }]
-  },
-  {
-    id: 'tool-weak-sector-umbrella',
-    name: '弱势板块雨伞',
-    category: 'SECTOR',
-    description: '每有 1 张弱势板块牌，结算风险 -2。',
-    effects: [{ type: 'WEAK_SECTOR_RISK_REDUCTION', amountPerCard: 2 }]
-  },
-  {
-    id: 'tool-blue-chip-ledger',
-    name: '蓝筹账本',
-    category: 'SECTOR',
-    description: '如果 5 张牌都是低风险牌，工具收益倍率 +0.12。',
-    effects: [{ type: 'LOW_RISK_RETURN_BONUS', bonus: 0.12 }]
-  },
-  {
-    id: 'tool-chive-notebook',
-    name: '韭菜笔记本',
-    category: 'LOSS_REBOUND',
-    description: '每次亏损后，下一次结算收益 +25%。',
-    effects: [{ type: 'AFTER_LOSS_NEXT_PROFIT_MULTIPLIER', multiplier: 1.25 }]
-  },
-  {
-    id: 'tool-rebound-spring',
-    name: '反弹弹簧',
-    category: 'LOSS_REBOUND',
-    description: '熊市时工具收益倍率 +0.1。',
-    effects: [{ type: 'MOOD_RETURN_BONUS', mood: 'BEAR', bonus: 0.1 }]
-  },
-  {
-    id: 'tool-bargain-basket',
-    name: '抄底菜篮',
-    category: 'LOSS_REBOUND',
-    description: '如果 5 张牌都是高风险牌，工具收益倍率 +0.18。',
-    effects: [{ type: 'HIGH_RISK_RETURN_BONUS', bonus: 0.18 }]
-  },
-  {
-    id: 'tool-paper-hands-gloves',
-    name: '纸手套',
-    category: 'LOSS_REBOUND',
-    description: '每次结算风险 -3。',
-    effects: [{ type: 'RISK_GAIN_FLAT', amount: -3 }]
-  },
-  {
-    id: 'tool-margin-stamp',
-    name: '融资印章',
-    category: 'LEVERAGE',
-    description: '有杠杆时工具收益倍率 +0.2。',
-    effects: [{ type: 'LEVERAGE_RETURN_BONUS', bonus: 0.2 }]
-  },
-  {
-    id: 'tool-margin-seatbelt',
-    name: '杠杆安全带',
-    category: 'LEVERAGE',
-    description: '有杠杆时结算风险 -10。',
-    effects: [{ type: 'LEVERAGE_RISK_REDUCTION', amount: 10 }]
-  },
-  {
-    id: 'tool-double-or-nothing-coin',
-    name: '梭哈硬币',
-    category: 'LEVERAGE',
-    description: '每次结算工具收益倍率 x1.15。',
-    effects: [{ type: 'TOOL_RETURN_MULTIPLIER', multiplier: 1.15 }]
-  },
-  {
-    id: 'tool-liquidation-helmet',
-    name: '爆仓头盔',
-    category: 'LEVERAGE',
-    description: '高波动日风险 -6。',
-    effects: [{ type: 'VOLATILITY_RISK_REDUCTION', threshold: 1.1, amount: 6 }]
-  }
+  { id: 'hot-money-seat', name: '游资席位', rarity: 'RARE', description: '每场行情第一次超过目标线，AP +1，风险 +5。', effectType: 'FIRST_TARGET_AP', value: 1 },
+  { id: 'cash-safe', name: '现金保险箱', rarity: 'UNCOMMON', description: '第一次止盈离场时，额外转化 100 现金。', effectType: 'FIRST_TAKE_PROFIT_CASH', value: 100 },
+  { id: 'quant-terminal', name: '量化终端', rarity: 'COMMON', description: '每回合第一次抽牌时，下一张牌费用 -1。', effectType: 'FIRST_DRAW_COST_REDUCE', value: 1 },
+  { id: 'old-hand-cup', name: '老股民茶杯', rarity: 'COMMON', description: '每场行情第一次 风险超过 70，风险 -15。', effectType: 'FIRST_HIGH_RISK_REDUCE', value: 15 },
+  { id: 'redline-margin', name: '红线融资单', rarity: 'RARE', description: '允许每回合透支 1 AP，透支时 风险 +15。', effectType: 'AP_OVERDRAFT', value: 1 },
+  { id: 'black-pool-radar', name: '黑池雷达', rarity: 'UNCOMMON', description: '高危节点奖励 +25%，进入高危节点时 风险 +8。', effectType: 'ELITE_REWARD_BONUS', value: 0.25 },
+  { id: 'risk-stamp', name: '风控印章', rarity: 'COMMON', description: '购买保险后，风险 -8。', effectType: 'INSURANCE_RISK_REDUCE', value: 8 },
+  { id: 'closing-horn', name: '尾盘喇叭', rarity: 'UNCOMMON', description: '交易链最后一张牌获得浮盈 +30%。', effectType: 'LAST_CARD_PROFIT', value: 0.3 },
+  { id: 'rebound-model', name: '反弹模型', rarity: 'COMMON', description: '风险 >= 60 时，低吸牌浮盈 +40%。', effectType: 'DIP_BONUS', value: 0.4 },
+  { id: 'exit-alarm', name: '清仓闹钟', rarity: 'RARE', description: '达到目标线后，第一次继续持有时获得一次免费止盈机会。', effectType: 'FREE_TAKE_PROFIT', value: 1 },
+  { id: 'profit-mirror', name: '盈利镜像', rarity: 'UNCOMMON', description: '交易链第一张收益牌浮盈 +25%。', effectType: 'CHAIN_START_BONUS', value: 0.25 },
+  { id: 'dip-scanner', name: '低吸扫描仪', rarity: 'COMMON', description: '风险 >= 50 时，所有收益牌额外 +20 浮盈。', effectType: 'DIP_BONUS', value: 20 },
+  { id: 'leverage-coil', name: '杠杆线圈', rarity: 'RARE', description: '杠杆牌风险增长 x1.5，但浮盈 +15%。', effectType: 'LEVERAGE_PROFIT', value: 0.15 },
+  { id: 'greed-compass', name: '贪婪罗盘', rarity: 'UNCOMMON', description: '继续持有时，奖励倍率额外 +0.25。', effectType: 'GREED_REWARD', value: 0.25 },
+  { id: 'noise-filter', name: '噪音过滤器', rarity: 'COMMON', description: 'Boss 战临时噪音无效。', effectType: 'NOISE_IMMUNE', value: 1 },
+  { id: 'sector-bell', name: '板块铃铛', rarity: 'COMMON', description: '每回合第一次抽牌额外抽 1 张。', effectType: 'DRAW_BONUS', value: 1 },
+  { id: 'stop-loss-chain', name: '止损链条', rarity: 'UNCOMMON', description: '锁定收益时额外 +15%。', effectType: 'LOCK_BONUS', value: 0.15 },
+  { id: 'bull-whistle', name: '牛市哨子', rarity: 'RARE', description: '风险越高，收益牌浮盈越高（风险 x2）。', effectType: 'RISK_PROFIT', value: 2 },
+  { id: 'panic-button', name: '恐慌按钮', rarity: 'UNCOMMON', description: 'Boss 战第一次爆仓缓冲生效。', effectType: 'BOSS_SHIELD', value: 1 },
+  { id: 'trend-lens', name: '趋势透镜', rarity: 'COMMON', description: '商店服务价格 -15%。', effectType: 'SHOP_DISCOUNT', value: 0.15 }
 ];
+
+export const TOOL_BY_ID = Object.fromEntries(TOOLS.map((t) => [t.id, t])) as Record<string, Tool>;
+
+export function getTool(id: string): Tool {
+  const tool = TOOL_BY_ID[id];
+  if (!tool) throw new Error(`Unknown tool: ${id}`);
+  return tool;
+}
+
+
+
+

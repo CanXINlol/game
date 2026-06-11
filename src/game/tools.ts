@@ -1,292 +1,388 @@
-import { TOOLS } from '../data/tools';
-import { createRng } from './rng';
-import type {
-  ComboResult,
-  LeverageLevel,
-  MarketState,
-  SettlementResult,
-  StockCard,
-  Tool,
-  ToolRuntimeState,
-  WarningLevel
-} from './types';
+﻿import type { Encounter, EncounterType, Run, TradeCard, TradeChainResult } from './types';
 
-export interface ToolEffectContext {
-  selectedCards: readonly StockCard[];
-  comboResult: ComboResult;
-  marketState: MarketState;
-  tools: readonly Tool[];
-  toolState: ToolRuntimeState;
-  floatingProfit: number;
-  risk: number;
-  maxRisk: number;
-  leverageLevel: LeverageLevel;
-  baseReturn: number;
-  baseRisk: number;
-  comboMultiplier: number;
-  marketMultiplier: number;
-  leverageMultiplier: number;
-  riskGain: number;
+export function hasTool(run: Run, toolId: string) {
+  return run.tools.includes(toolId);
 }
 
-export interface ToolEffectResult {
-  comboMultiplier: number;
-  toolMultiplier: number;
-  grossProfit: number;
-  riskGain: number;
-  newFloatingProfit: number;
-  newRisk: number;
-  isBankrupt: boolean;
-  warningLevel: WarningLevel;
-  toolMessages: string[];
-  toolLockedProfit: number;
-  principalOverride?: number;
-  updatedToolState: ToolRuntimeState;
+export function hasActiveInsurance(run: Run, insuranceId: string) {
+  return run.insurances.some((i) => i.insuranceId === insuranceId && !i.used);
 }
 
-export function createStartingTools(seed: string, count = 5) {
-  return createRng(`${seed}:tools`).shuffle(TOOLS).slice(0, count);
+export function applyToolOnChainResult(run: Run, result: TradeChainResult, cardIds: string[]): Run {
+  let next = { ...run };
+  const encounter = next.currentEncounter;
+  if (!encounter) return next;
+
+  if (hasTool(run, 'closing-horn') && cardIds.length > 0) {
+    const lastId = cardIds[cardIds.length - 1];
+    const lastStep = result.steps.find((s) => s.cardId === lastId);
+    if (lastStep) {
+      const bonus = Math.floor(lastStep.floatingProfitGained * 0.3);
+      next = {
+        ...next,
+        currentEncounter: {
+          ...encounter,
+          floatingProfit: encounter.floatingProfit + bonus
+        }
+      };
+    }
+  }
+
+  if (hasTool(run, 'hot-money-seat') && result.reachedTarget && !run.toolTriggers['hot-money-seat']) {
+    const enc = next.currentEncounter!;
+    next = {
+      ...next,
+      ap: next.ap + 1,
+      toolTriggers: { ...next.toolTriggers, 'hot-money-seat': true },
+      currentEncounter: { ...enc, risk: Math.min(enc.maxRisk, enc.risk + 5) }
+    };
+  }
+
+  return next;
 }
 
-export function createInitialToolState(): ToolRuntimeState {
+export function applyTraderAndToolRiskModifier(
+  run: Run,
+  riskDelta: number,
+  card?: TradeCard,
+  encounter = run.currentEncounter ?? undefined
+): number {
+  let delta = riskDelta;
+
+  if (run.trader.id === 'hot-money' && riskDelta > 0) {
+    delta = Math.ceil(riskDelta * 1.25);
+  }
+
+  if (run.trader.id === 'old-hand' && card && riskDelta > 0 && card.riskDelta >= 15) {
+    delta = Math.ceil(riskDelta * 0.9);
+  }
+
+  if (card && hasTool(run, 'leverage-coil') && card.archetype === 'LEVERAGE' && riskDelta > 0) {
+    delta = Math.ceil(riskDelta * 1.5);
+  }
+
+  if (encounter?.boss?.bossId === 'redline-audit') {
+    const phase = encounter.boss.phases[encounter.boss.currentPhaseIndex];
+    if (phase.id === 'p1' && card && card.riskDelta > 10 && riskDelta > 0) {
+      delta += 3;
+    }
+  }
+
+  if (encounter) {
+    delta = Math.ceil(delta * encounter.riskGainMultiplier);
+  }
+
+  return delta;
+}
+
+export function applyInsuranceOnBankruptcy(run: Run): { run: Run; prevented: boolean } {
+  if (run.currentEncounter?.boss && hasTool(run, 'panic-button') && !run.toolTriggers['panic-button']) {
+    const floating = Math.floor(run.currentEncounter.floatingProfit * 0.5);
+    return {
+      prevented: true,
+      run: {
+        ...run,
+        toolTriggers: { ...run.toolTriggers, 'panic-button': true },
+        currentEncounter: {
+          ...run.currentEncounter,
+          risk: 85,
+          floatingProfit: floating,
+          status: 'ACTIVE'
+        },
+        status: 'PLAYER_TURN'
+      }
+    };
+  }
+
+  const marginDelay = run.insurances.find((i) => i.insuranceId === 'margin-delay' && !i.used);
+  if (marginDelay && run.currentEncounter) {
+    return {
+      prevented: true,
+      run: {
+        ...run,
+        insurances: run.insurances.map((i) =>
+          i.insuranceId === 'margin-delay' ? { ...i, used: true } : i
+        ),
+        currentEncounter: {
+          ...run.currentEncounter,
+          risk: 90,
+          status: 'ACTIVE'
+        },
+        status: 'PLAYER_TURN',
+        turnSummary: [...run.turnSummary, '追保延迟：本回合免于爆仓，风险降到 90。']
+      }
+    };
+  }
+
+  const buffer = run.insurances.find((i) => i.insuranceId === 'bankruptcy-buffer' && !i.used);
+  if (buffer && run.currentEncounter) {
+    const floating = Math.floor(run.currentEncounter.floatingProfit * 0.5);
+    return {
+      prevented: true,
+      run: {
+        ...run,
+        insurances: run.insurances.map((i) =>
+          i.insuranceId === 'bankruptcy-buffer' ? { ...i, used: true } : i
+        ),
+        currentEncounter: {
+          ...run.currentEncounter,
+          risk: 85,
+          floatingProfit: floating,
+          status: 'ACTIVE'
+        },
+        status: 'PLAYER_TURN'
+      }
+    };
+  }
+
+  const shield = run.insurances.find((i) => i.insuranceId === 'floating-shield' && !i.used);
+  if (shield && run.currentEncounter) {
+    const floating = Math.floor(run.currentEncounter.floatingProfit * 0.3);
+    return {
+      prevented: true,
+      run: {
+        ...run,
+        insurances: run.insurances.map((i) =>
+          i.insuranceId === 'floating-shield' ? { ...i, used: true } : i
+        ),
+        currentEncounter: {
+          ...run.currentEncounter,
+          risk: 90,
+          floatingProfit: floating,
+          status: 'ACTIVE'
+        },
+        status: 'PLAYER_TURN'
+      }
+    };
+  }
+
+  return { run, prevented: false };
+}
+
+export function applyTakeProfitTools(run: Run, cashGain: number): number {
+  let bonus = 0;
+  if (hasTool(run, 'cash-safe') && !run.toolTriggers['cash-safe']) {
+    bonus += 100;
+    run.toolTriggers['cash-safe'] = true;
+  }
+  if (run.trader.id === 'old-hand') {
+    bonus += Math.floor(cashGain * 0.1);
+  }
+  return cashGain + bonus;
+}
+
+export function getTraderProfitMultiplier(run: Run, card: TradeCard): number {
+  let mult = 1;
+  if (run.trader.id === 'hot-money' && card.archetype === 'MOMENTUM') mult *= 1.2;
+  if (run.trader.id === 'risk-manager' && card.role === 'PAYOFF') mult *= 0.9;
+  if (run.trader.id === 'quant-newbie' && card.role === 'CASH_OUT') mult *= 0.8;
+  if (run.trader.id === 'bankrupt-gambler' && run.currentEncounter) {
+    mult *= 1 + run.currentEncounter.risk / 200;
+  }
+  if (hasTool(run, 'rebound-model') && card.id === 'dip-rebound' && run.currentEncounter && run.currentEncounter.risk >= 60) {
+    mult *= 1.4;
+  }
+  if (hasTool(run, 'leverage-coil') && card.archetype === 'LEVERAGE') {
+    mult *= 1.15;
+  }
+  return mult;
+}
+
+export function getToolProfitBonus(
+  run: Run,
+  card: TradeCard,
+  mutableRisk: number,
+  isFirstProfitCard: boolean
+): number {
+  let bonus = 0;
+
+  if (isFirstProfitCard && hasTool(run, 'profit-mirror') && (card.numericEffects.floatingProfit ?? 0) > 0) {
+    bonus += Math.floor((card.numericEffects.floatingProfit ?? 0) * 0.25);
+  }
+
+  if (hasTool(run, 'dip-scanner') && mutableRisk >= 50 && (card.numericEffects.floatingProfit ?? 0) > 0) {
+    bonus += 20;
+  }
+
+  if (hasTool(run, 'bull-whistle') && (card.numericEffects.floatingProfit ?? 0) > 0) {
+    bonus += Math.floor(mutableRisk * 2);
+  }
+
+  return bonus;
+}
+
+export function applyLockBonus(run: Run, lockedAmount: number): number {
+  if (hasTool(run, 'stop-loss-chain')) {
+    return Math.floor(lockedAmount * 1.15);
+  }
+  if (run.trader.id === 'old-hand') {
+    return Math.floor(lockedAmount * 1.1);
+  }
+  return lockedAmount;
+}
+
+export function modifyEncounterForTools(run: Run, encounter: Encounter, nodeType?: EncounterType): Encounter {
+  let next = { ...encounter };
+
+  if (hasTool(run, 'black-pool-radar')) {
+    next = { ...next, cashReward: Math.floor(next.cashReward * 1.25) };
+    if (nodeType === 'ELITE') {
+      next = { ...next, risk: Math.min(next.maxRisk, next.risk + 8) };
+    }
+  }
+
+  if (hasActiveInsurance(run, 'risk-hedge')) {
+    next = { ...next, riskGainMultiplier: next.riskGainMultiplier * 0.7 };
+  }
+
+  if (hasActiveInsurance(run, 'audit-pass') && next.boss) {
+    next = { ...next, risk: Math.max(0, next.risk - 10) };
+  }
+
+  if (hasActiveInsurance(run, 'black-pool-umbrella') && nodeType === 'ELITE') {
+    next = { ...next, risk: Math.max(0, next.risk - 8) };
+  }
+
+  return next;
+}
+
+export function applyInsuranceOnEncounterEnd(run: Run): Run {
+  if (!run.currentEncounter) return run;
+
+  let encounter = run.currentEncounter;
+  let next = run;
+
+  if (hasActiveInsurance(run, 'profit-lock')) {
+    const locked = Math.floor(encounter.floatingProfit * 0.4);
+    encounter = {
+      ...encounter,
+      lockedProfit: encounter.lockedProfit + locked
+    };
+    next = markInsuranceUsed(next, 'profit-lock');
+  }
+
+  return { ...next, currentEncounter: encounter };
+}
+
+export function applyFinalStopIfNeeded(run: Run, risk: number, floatingProfit: number): {
+  lockedDelta: number;
+  insuranceUsed: boolean;
+} {
+  if (!hasActiveInsurance(run, 'final-stop') || risk < 90) {
+    return { lockedDelta: 0, insuranceUsed: false };
+  }
+  return { lockedDelta: Math.floor(floatingProfit * 0.5), insuranceUsed: true };
+}
+
+export function markInsuranceUsed(run: Run, insuranceId: string): Run {
   return {
-    triggeredToolIds: [],
-    nextProfitMultiplier: 1
+    ...run,
+    insurances: run.insurances.map((i) =>
+      i.insuranceId === insuranceId ? { ...i, used: true } : i
+    )
   };
 }
 
-export function getHoldCarryMultiplier(tools: readonly Tool[], baseMultiplier: number) {
-  return roundToTwoDecimals(
-    tools.reduce((multiplier, tool) => {
-      const bonus = tool.effects.reduce((total, effect) => {
-        return effect.type === 'HOLD_CARRY_BONUS' ? total + effect.bonus : total;
-      }, 0);
-
-      return multiplier + bonus;
-    }, baseMultiplier)
-  );
-}
-
-export function applyToolEffects(context: ToolEffectContext): ToolEffectResult {
-  let comboMultiplier = context.comboMultiplier;
-  let toolMultiplier = context.toolState.nextProfitMultiplier;
-  let riskGain = context.riskGain;
-  const toolMessages: string[] = [];
-  let toolLockedProfit = 0;
-  let principalOverride: number | undefined;
-  const triggeredToolIds = new Set(context.toolState.triggeredToolIds);
-
-  for (const tool of context.tools) {
-    for (const effect of tool.effects) {
-      switch (effect.type) {
-        case 'HOLD_CARRY_BONUS':
-          break;
-        case 'FIRST_LOSS_LOCK_FLOATING_PROFIT':
-        case 'AFTER_LOSS_NEXT_PROFIT_MULTIPLIER':
-        case 'PREVENT_FIRST_BANKRUPTCY':
-          break;
-        case 'SAME_SECTOR_COMBO_BONUS':
-          if (isSameSector(context.selectedCards)) {
-            comboMultiplier += effect.bonus;
-            toolMessages.push(`${tool.name}：同板块牌型倍率 +${effect.bonus}`);
-          }
-          break;
-        case 'TOOL_RETURN_MULTIPLIER':
-          toolMultiplier *= effect.multiplier;
-          toolMessages.push(`${tool.name}：工具收益倍率 x${effect.multiplier}`);
-          break;
-        case 'RISK_GAIN_FLAT':
-          riskGain += effect.amount;
-          toolMessages.push(`${tool.name}：风险 ${formatSigned(effect.amount)}`);
-          break;
-        case 'HOT_SECTOR_RETURN_BONUS': {
-          const hotCount = countSector(
-            context.selectedCards,
-            context.marketState.hotSector
-          );
-          if (hotCount > 0) {
-            const bonus = hotCount * effect.bonusPerCard;
-            toolMultiplier += bonus;
-            toolMessages.push(`${tool.name}：热门板块收益倍率 +${roundToTwoDecimals(bonus)}`);
-          }
-          break;
-        }
-        case 'WEAK_SECTOR_RISK_REDUCTION': {
-          const weakCount = countSector(
-            context.selectedCards,
-            context.marketState.weakSector
-          );
-          if (weakCount > 0) {
-            const reduction = weakCount * effect.amountPerCard;
-            riskGain -= reduction;
-            toolMessages.push(`${tool.name}：弱势板块风险 -${reduction}`);
-          }
-          break;
-        }
-        case 'MOOD_RETURN_BONUS':
-          if (context.marketState.mood === effect.mood) {
-            toolMultiplier += effect.bonus;
-            toolMessages.push(`${tool.name}：市场情绪收益倍率 +${effect.bonus}`);
-          }
-          break;
-        case 'LEVERAGE_RETURN_BONUS':
-          if (context.leverageLevel > 0) {
-            toolMultiplier += effect.bonus;
-            toolMessages.push(`${tool.name}：杠杆收益倍率 +${effect.bonus}`);
-          }
-          break;
-        case 'LEVERAGE_RISK_REDUCTION':
-          if (context.leverageLevel > 0) {
-            riskGain -= effect.amount;
-            toolMessages.push(`${tool.name}：杠杆风险 -${effect.amount}`);
-          }
-          break;
-        case 'VOLATILITY_RISK_REDUCTION':
-          if (context.marketState.volatility >= effect.threshold) {
-            riskGain -= effect.amount;
-            toolMessages.push(`${tool.name}：高波动风险 -${effect.amount}`);
-          }
-          break;
-        case 'LOW_RISK_RETURN_BONUS':
-          if (context.selectedCards.every((card) => card.risk === 'low')) {
-            toolMultiplier += effect.bonus;
-            toolMessages.push(`${tool.name}：低风险组合收益倍率 +${effect.bonus}`);
-          }
-          break;
-        case 'HIGH_RISK_RETURN_BONUS':
-          if (
-            context.selectedCards.every(
-              (card) => card.risk === 'high' || card.risk === 'extreme'
-            )
-          ) {
-            toolMultiplier += effect.bonus;
-            toolMessages.push(`${tool.name}：高风险组合收益倍率 +${effect.bonus}`);
-          }
-          break;
-      }
-    }
+export function applyOldHandCup(run: Run, risk: number): Run {
+  if (!hasTool(run, 'old-hand-cup') || run.toolTriggers['old-hand-cup'] || risk < 70 || !run.currentEncounter) {
+    return run;
   }
-
-  riskGain = roundToTwoDecimals(Math.max(0, riskGain));
-  toolMultiplier = roundToTwoDecimals(toolMultiplier);
-  comboMultiplier = roundToTwoDecimals(comboMultiplier);
-  let grossProfit = roundToTwoDecimals(
-    context.baseReturn *
-      comboMultiplier *
-      context.marketMultiplier *
-      toolMultiplier *
-      context.leverageMultiplier
-  );
-
-  for (const tool of context.tools) {
-    for (const effect of tool.effects) {
-      if (
-        effect.type === 'FIRST_LOSS_LOCK_FLOATING_PROFIT' &&
-        grossProfit < 0 &&
-        context.floatingProfit > 0 &&
-        !triggeredToolIds.has(tool.id)
-      ) {
-        const lockedProfit = roundToTwoDecimals(
-          context.floatingProfit * effect.ratio
-        );
-        toolLockedProfit += lockedProfit;
-        triggeredToolIds.add(tool.id);
-        toolMessages.push(`${tool.name}：首次亏损，自动锁定浮盈 ${lockedProfit}`);
-      }
-    }
-  }
-
-  let nextProfitMultiplier = grossProfit < 0 ? 1 : 1;
-
-  for (const tool of context.tools) {
-    for (const effect of tool.effects) {
-      if (effect.type === 'AFTER_LOSS_NEXT_PROFIT_MULTIPLIER' && grossProfit < 0) {
-        nextProfitMultiplier = Math.max(nextProfitMultiplier, effect.multiplier);
-        toolMessages.push(`${tool.name}：亏损后，下一次收益 x${effect.multiplier}`);
-      }
-    }
-  }
-
-  let newFloatingProfit = roundToTwoDecimals(
-    context.floatingProfit - toolLockedProfit + grossProfit
-  );
-  let newRisk = roundToTwoDecimals(context.risk + riskGain);
-  let isBankrupt = newRisk >= context.maxRisk;
-
-  for (const tool of context.tools) {
-    for (const effect of tool.effects) {
-      if (
-        effect.type === 'PREVENT_FIRST_BANKRUPTCY' &&
-        isBankrupt &&
-        !triggeredToolIds.has(tool.id)
-      ) {
-        triggeredToolIds.add(tool.id);
-        principalOverride = effect.principalAfterSave;
-        newFloatingProfit = 0;
-        newRisk = Math.max(0, context.maxRisk - 1);
-        isBankrupt = false;
-        toolMessages.push(`${tool.name}：抵消首次爆仓，本金变为 ${effect.principalAfterSave}`);
-      }
-    }
-  }
-
   return {
-    comboMultiplier,
-    toolMultiplier,
-    grossProfit,
-    riskGain,
-    newFloatingProfit,
-    newRisk,
-    isBankrupt,
-    warningLevel: getWarningLevel(newRisk, context.maxRisk),
-    toolMessages,
-    toolLockedProfit,
-    principalOverride,
-    updatedToolState: {
-      triggeredToolIds: [...triggeredToolIds],
-      nextProfitMultiplier
+    ...run,
+    toolTriggers: { ...run.toolTriggers, 'old-hand-cup': true },
+    currentEncounter: {
+      ...run.currentEncounter,
+      risk: Math.max(0, run.currentEncounter.risk - 15)
     }
   };
 }
 
-export function appendToolSummary(summaryText: string, result: ToolEffectResult) {
-  if (result.toolMessages.length === 0) {
-    return `${summaryText}；工具未触发额外效果`;
+export function applyInsurancePurchaseBonus(run: Run): Run {
+  if (!hasTool(run, 'risk-stamp') || !run.currentEncounter) return run;
+  return {
+    ...run,
+    currentEncounter: {
+      ...run.currentEncounter,
+      risk: Math.max(0, run.currentEncounter.risk - 8)
+    }
+  };
+}
+
+export function getShopServiceDiscount(run: Run): number {
+  if (hasTool(run, 'trend-lens')) return 0.85;
+  return 1;
+}
+
+export function getRiskControlDiscount(run: Run): number {
+  if (run.trader.id === 'risk-manager') return 0.75;
+  return 1;
+}
+
+export function shouldInjectBossNoise(run: Run): boolean {
+  if (!run.currentEncounter?.boss) return false;
+  if (hasTool(run, 'noise-filter')) return false;
+  const phase = run.currentEncounter.boss.phases[run.currentEncounter.boss.currentPhaseIndex];
+  return run.currentEncounter.boss.bossId === 'black-pool-ebb' && phase.id === 'p1';
+}
+
+export function getDrawBonusForTurn(run: Run, isTurnStartDraw: boolean): number {
+  let bonus = 0;
+  if (isTurnStartDraw && hasTool(run, 'sector-bell') && !run.toolTriggers['sector-bell-draw']) {
+    bonus += 1;
+    run.toolTriggers['sector-bell-draw'] = true;
   }
-
-  return `${summaryText}；工具效果：${result.toolMessages.join('；')}`;
-}
-
-function isSameSector(cards: readonly StockCard[]) {
-  return cards.length > 0 && cards.every((card) => card.sector === cards[0].sector);
-}
-
-function countSector(cards: readonly StockCard[], sector: string) {
-  return cards.filter((card) => card.sector === sector).length;
-}
-
-function getWarningLevel(risk: number, maxRisk: number): WarningLevel {
-  if (risk >= maxRisk) {
-    return 'BANKRUPT';
+  if (run.trader.id === 'quant-newbie' && isTurnStartDraw && !run.toolTriggers['quant-draw']) {
+    bonus += 1;
+    run.toolTriggers['quant-draw'] = true;
   }
-
-  const ratio = risk / maxRisk;
-
-  if (ratio >= 0.75) {
-    return 'DANGER';
-  }
-
-  if (ratio >= 0.5) {
-    return 'CAUTION';
-  }
-
-  return 'SAFE';
+  return bonus;
 }
 
-function roundToTwoDecimals(value: number) {
-  return Math.round(value * 100) / 100;
+export function applyQuantTerminalCostReduction(run: Run): Run {
+  if (!hasTool(run, 'quant-terminal') || run.toolTriggers['quant-terminal']) return run;
+  return {
+    ...run,
+    nextCardCostReduction: 1,
+    toolTriggers: { ...run.toolTriggers, 'quant-terminal': true }
+  };
 }
 
-function formatSigned(value: number) {
-  return value >= 0 ? `+${value}` : `${value}`;
+export function resetTurnToolTriggers(run: Run): Run {
+  const next = { ...run.toolTriggers };
+  delete next['sector-bell-draw'];
+  delete next['quant-terminal'];
+  delete next['quant-draw'];
+  return {
+    ...run,
+    toolTriggers: next,
+    apOverdraftAvailable: run.tools.includes('redline-margin'),
+    nextCardCostReduction: 0
+  };
 }
+
+export function canOverdraftAp(run: Run, totalCost: number): boolean {
+  return run.apOverdraftAvailable && hasTool(run, 'redline-margin') && totalCost <= run.ap + 1;
+}
+
+export function applyApOverdraft(run: Run): Run {
+  if (!run.currentEncounter) return run;
+  return {
+    ...run,
+    apOverdraftAvailable: false,
+    currentEncounter: {
+      ...run.currentEncounter,
+      risk: Math.min(run.currentEncounter.maxRisk, run.currentEncounter.risk + 15)
+    }
+  };
+}
+
+export function grantExitAlarmFreeTakeProfit(run: Run): Run {
+  if (!hasTool(run, 'exit-alarm') || run.toolTriggers['exit-alarm']) return run;
+  return {
+    ...run,
+    freeTakeProfitAvailable: true,
+    toolTriggers: { ...run.toolTriggers, 'exit-alarm': true }
+  };
+}
+
+

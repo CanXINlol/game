@@ -1,154 +1,87 @@
-export type TraderDifficulty = '新手' | '标准' | '进阶' | '高难';
+﻿import { STOCK_CARDS } from './stockCards';
+import type { Trader } from '../game/types';
 
-export interface TraderDefinition {
-  id: string;
-  name: string;
-  title: string;
-  description: string;
-  startingCash: number;
-  startingDeckIds: string[];
-  startingToolIds: string[];
-  passive: string;
-  riskRule: string;
-  rewardBias: string;
-  unlockCondition: string;
-  difficulty: TraderDifficulty;
-}
+const starter12 = STOCK_CARDS.slice(0, 12).map((c) => c.id);
 
-export const TRADERS: TraderDefinition[] = [
+export const TRADERS: Trader[] = [
   {
     id: 'old-hand',
     name: '老股民',
     title: '稳健止盈 / 风控',
-    description: '现金更宽裕，止盈牌锁得更多，适合先学会活下来。',
-    startingCash: 170,
-    startingDeckIds: [
-      'formal-consumer-003',
-      'formal-consumer-003',
-      'formal-tech-006',
-      'formal-medical-002',
-      'formal-consumer-001',
-      'formal-medical-003',
-      'formal-tech-002',
-      'formal-energy-002',
-      'formal-tech-004',
-      'formal-finance-003',
-      'formal-finance-006',
-      'market-noise'
-    ],
-    startingToolIds: ['formal-tool-old-trader-cup'],
-    passive: '止盈牌锁定比例 +10%；高风险牌收益 x0.9。',
-    riskRule: '更容易把浮盈变成现金，但爆发上限略低。',
-    rewardBias: '更容易走风控、锁利和删牌路线。',
-    unlockCondition: '默认解锁',
-    difficulty: '新手'
+    description: '现金更宽裕，止盈更强，适合先学会活下来。',
+    startingCash: 150,
+    startingDeckCardIds: [...starter12],
+    startingToolIds: ['old-hand-cup'],
+    passive: '止盈牌锁定比例 +10%；高风险牌收益 x0.9。'
   },
   {
     id: 'hot-money',
     name: '游资打板客',
-    title: '追涨 / 涨停 / 高风险',
-    description: '追涨和涨停牌更猛，风险也涨得更快。',
-    startingCash: 110,
-    startingDeckIds: [
-      'formal-tech-001',
-      'formal-energy-001',
-      'formal-tech-003',
-      'formal-consumer-005',
-      'formal-finance-001',
-      'formal-tech-005',
-      'formal-consumer-001',
-      'formal-tech-004',
-      'formal-finance-005',
-      'formal-energy-005',
-      'formal-finance-006',
-      'market-noise'
+    title: '追涨爆发',
+    description: '追涨牌更猛，风险涨得更快，适合冲高打法。',
+    startingCash: 100,
+    startingDeckCardIds: [
+      'chase-limit', 'extreme-chase', 'dragon-follow', 'late-ignite',
+      'open-position', 'margin-add', 'theme-ignite', 'closing-sweep',
+      'hedge', 'partial-profit', 'quant-turnover', 'full-exit'
     ],
-    startingToolIds: ['formal-tool-limit-up-calculator'],
-    passive: '追涨牌和杠杆牌收益 x1.2；风险增长 x1.25。',
-    riskRule: '爆发越快，越需要提前准备止盈或保险。',
-    rewardBias: '更偏追涨、涨停和高奖励市场压力。',
-    unlockCondition: '默认解锁',
-    difficulty: '进阶'
+    startingToolIds: ['hot-money-seat'],
+    passive: '追涨牌收益 x1.2；风险增长 x1.25。'
   },
   {
     id: 'quant-newbie',
     name: '量化新人',
-    title: '抽牌 / 复制 / 低成本连锁',
-    description: '每回合第一次抽牌或复制会给额外收益，但终结牌偏弱。',
-    startingCash: 125,
-    startingDeckIds: [
-      'formal-tech-002',
-      'formal-finance-005',
-      'formal-energy-002',
-      'formal-medical-005',
-      'formal-energy-006',
-      'formal-consumer-002',
-      'formal-tech-001',
-      'formal-consumer-003',
-      'formal-medical-006',
-      'formal-consumer-001',
-      'formal-finance-006',
-      'market-noise'
+    title: '抽牌 / 复制 / 引擎',
+    description: '容易做交易链引擎，但终结牌偏弱。',
+    startingCash: 120,
+    startingDeckCardIds: [
+      'quant-turnover', 'wash-turnover', 'quant-clone', 'overnight-order',
+      'stealth-build', 'open-position', 'hedge', 'volume-wash',
+      'ap-rush', 'partial-profit', 'dip-rebound', 'full-exit'
     ],
-    startingToolIds: ['formal-tool-red-candle-stamp'],
-    passive: '每回合第一次抽牌或复制获得 8 收益；终结牌收益 x0.8。',
-    riskRule: '连锁强，但拖太久会被敌方意图压垮。',
-    rewardBias: '更偏抽牌、复制、低费用和升级。',
-    unlockCondition: '默认解锁',
-    difficulty: '标准'
+    startingToolIds: ['quant-terminal'],
+    passive: '每回合第一次抽牌额外 +1；终结牌收益 x0.8。'
   },
   {
     id: 'bankrupt-gambler',
     name: '破产赌徒',
-    title: '杠杆 / 低血高收益',
-    description: '风险越高收益越高，但爆仓惩罚更狠。',
-    startingCash: 80,
-    startingDeckIds: [
-      'formal-tech-005',
-      'formal-energy-005',
-      'formal-finance-004',
-      'formal-medical-004',
-      'formal-tech-003',
-      'formal-finance-001',
-      'formal-consumer-001',
-      'formal-medical-006',
-      'formal-finance-005',
-      'formal-consumer-003',
-      'formal-finance-006',
-      'market-noise'
+    title: '杠杆边缘',
+    description: '风险越高收益越高，爆仓惩罚更狠。',
+    startingCash: 70,
+    startingDeckCardIds: [
+      'redline-leverage', 'dual-margin', 'emotion-pulse', 'extreme-chase',
+      'limit-dip', 'margin-add', 'open-position', 'chase-limit',
+      'black-swan-hedge', 'partial-profit', 'hedge', 'full-exit'
     ],
-    startingToolIds: ['formal-tool-margin-stamp'],
-    passive: '风险越高收益越高；爆仓线 -10。',
-    riskRule: '爆仓时会损失更多已锁定收益。',
-    rewardBias: '更偏杠杆、爆发和高危节点。',
-    unlockCondition: '默认解锁',
-    difficulty: '高难'
+    startingToolIds: ['redline-margin'],
+    passive: '风险越高收益越高；爆仓损失全部浮盈。'
   },
   {
     id: 'risk-manager',
     name: '风控经理',
-    title: '保险 / 降风险 / 锁浮盈',
-    description: '风控服务更便宜，锁利更稳，但爆发较弱。',
+    title: '保险 / 降风险 / 锁收益',
+    description: '经济和安全性强，爆发较弱。',
     startingCash: 140,
-    startingDeckIds: [
-      'formal-consumer-003',
-      'formal-finance-002',
-      'formal-medical-003',
-      'formal-tech-006',
-      'formal-medical-002',
-      'formal-finance-003',
-      'formal-consumer-001',
-      'formal-tech-002',
-      'formal-energy-002',
-      'formal-medical-006',
-      'formal-finance-006',
-      'market-noise'
+    startingDeckCardIds: [
+      'hedge', 'partial-profit', 'cash-defense', 'breakeven-stop',
+      'black-swan-hedge', 'dip-rebound', 'open-position', 'volume-wash',
+      'swing-take', 'stealth-build', 'quant-turnover', 'full-exit'
     ],
-    startingToolIds: ['formal-tool-stop-loss-ruler'],
-    passive: '风控室和商店服务价格 x0.75；回报牌和终结牌收益 x0.9。',
-    riskRule: '更容易修牌和降风险，但击穿速度偏慢。',
-    rewardBias: '更偏保险、删牌、升级和降风险。',
-    unlockCondition: '默认解锁',
-    difficulty: '标准'
+    startingToolIds: ['risk-stamp'],
+    passive: '风控服务价格 x0.75；回报牌收益 x0.9。'
   }
 ];
+
+export function getTrader(traderId = 'old-hand'): Trader {
+  const trader = TRADERS.find((item) => item.id === traderId);
+
+  if (!trader) {
+    throw new Error(`Unknown trader: ${traderId}`);
+  }
+
+  return trader;
+}
+
+
+
+

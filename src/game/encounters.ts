@@ -1,398 +1,344 @@
-import { discardContinuousTurn, drawFromContinuousDeck } from './deck';
-import { spendCash } from './economy';
-import type { EventCard } from './effects';
-import type { EventGameState } from './playCard';
+﻿import { STOCK_CARDS } from '../data/stockCards';
+import { getTrader } from '../data/traders';
+import { createBossEncounter } from './bosses';
+import { createRouteMap } from './routeMap';
+import { createShop } from './shop';
+import { createTelemetry, recordBankruptcy, recordGreedChoice, recordPeakProfit } from './telemetry';
+import {
+  applyInsuranceOnBankruptcy,
+  applyInsuranceOnEncounterEnd,
+  applyQuantTerminalCostReduction,
+  applyTakeProfitTools,
+  getDrawBonusForTurn,
+  grantExitAlarmFreeTakeProfit,
+  resetTurnToolTriggers,
+  shouldInjectBossNoise
+} from './tools';
+import { NOISE_GLITCH_CARD } from '../data/stockCards';
+import { createRng } from './rng';
+import { MAX_CHAIN_CARDS, previewTradeChain } from './playCard';
+import type { Encounter, GreedChoice, RouteNode, Run, RunStatus } from './types';
 
-export type MarketIntentType =
-  | 'RISK_ATTACK'
-  | 'SHIELD_UP'
-  | 'WEAKEN_SECTOR'
-  | 'TAX_PROFIT'
-  | 'LOCK_HAND'
-  | 'VOLATILITY_SPIKE'
-  | 'SUMMON_NOISE';
+export const HAND_SIZE = 5;
+export const DEFAULT_MAX_AP = 3;
 
-export interface MarketIntent {
-  id: string;
-  type: MarketIntentType;
-  label: string;
-  description: string;
-  value?: number;
-  sector?: string;
-}
-
-const EVENT_HAND_SIZE = 5;
-const INTENT_SEQUENCE: Array<Omit<MarketIntent, 'id'>> = [
-  {
-    type: 'RISK_ATTACK',
-    label: '风险打击',
-    description: '下回合结算时 risk +12。',
-    value: 12
-  },
-  {
-    type: 'SHIELD_UP',
-    label: '加厚护盾',
-    description: '下回合结算时 MarketPressure 获得 18 shield。',
-    value: 18
-  },
-  {
-    type: 'WEAKEN_SECTOR',
-    label: '削弱科技',
-    description: '下回合 TECH 收益降低，最好换板块或打穿。',
-    sector: 'TECH'
-  },
-  {
-    type: 'TAX_PROFIT',
-    label: '浮盈征税',
-    description: '下回合结算时扣除 20% 当前浮盈。',
-    value: 0.2
-  },
-  {
-    type: 'LOCK_HAND',
-    label: '锁手提费',
-    description: '下回合抽牌后，低费手牌 cost +1。',
-    value: 1
-  },
-  {
-    type: 'VOLATILITY_SPIKE',
-    label: '波动尖刺',
-    description: '下回合收益 x1.25，risk 事件也 x1.25。',
-    value: 1.25
-  },
-  {
-    type: 'SUMMON_NOISE',
-    label: '噪音入场',
-    description: '下回合结算时往弃牌堆加入 1 张市场噪音。',
-    value: 1
-  }
-];
-
-export const MARKET_NOISE_CARD: EventCard = {
-  id: 'market-noise',
-  name: '市场噪音',
-  sector: 'FINANCE',
-  rank: 1,
-  risk: 'medium',
-  tags: ['volatile'],
-  baseReturn: 0,
-  baseRisk: 3,
-  cardType: 'RISK',
-  playEffect: '没有收益，只会 risk +3。\n这是市场压力塞进牌组的噪音牌。',
-  cost: 0,
-  cardRole: 'STARTER',
-  effects: [{ type: 'GAIN_RISK', value: 3 }]
+const ENCOUNTER_PRESETS: Record<string, Partial<Encounter>> = {
+  'night-move': { name: '夜盘异动', targetProfit: 450, initialRisk: 0, cashReward: 100 },
+  'glass-limit': { name: '玻璃涨停', targetProfit: 520, initialRisk: 5, cashReward: 110 },
+  'late-news': { name: '迟到利好', targetProfit: 400, initialRisk: 0, cashReward: 90 },
+  'fake-break': { name: '假突破', targetProfit: 480, initialRisk: 8, cashReward: 100 },
+  'short-echo': { name: '空头回声', targetProfit: 500, initialRisk: 10, cashReward: 105 },
+  'leverage-siege': { name: '杠杆围城', targetProfit: 650, initialRisk: 20, cashReward: 150 },
+  'limit-down': { name: '跌停回廊', targetProfit: 700, initialRisk: 25, cashReward: 160 },
+  'dragon-tiger': { name: '龙虎榜幽灵', targetProfit: 680, initialRisk: 18, cashReward: 155 },
+  'circuit-eve': { name: '熔断前夜', targetProfit: 750, initialRisk: 30, cashReward: 180 }
 };
 
-export function createMarketIntent(seed: string, index: number): MarketIntent {
-  const seedOffset = Array.from(seed).reduce(
-    (total, char) => total + char.charCodeAt(0),
-    0
-  );
-  const intent = INTENT_SEQUENCE[(seedOffset + index) % INTENT_SEQUENCE.length];
+export function createEncounterForNode(node: RouteNode, rewardMultiplier = 1): Encounter {
+  if (node.bossId) {
+    return createBossEncounter(node.bossId, rewardMultiplier);
+  }
+
+  const preset = ENCOUNTER_PRESETS[node.encounterKey ?? 'night-move'] ?? ENCOUNTER_PRESETS['night-move'];
+  const isElite = node.type === 'ELITE';
 
   return {
-    ...intent,
-    id: `${intent.type}-${seedOffset + index}`
+    id: node.encounterKey ?? node.id,
+    name: node.name,
+    type: isElite ? 'ELITE' : 'NORMAL',
+    targetProfit: preset.targetProfit ?? 500,
+    targetProfitBonus: 0,
+    floatingProfit: 0,
+    lockedProfit: 0,
+    cashReward: preset.cashReward ?? 100,
+    risk: preset.initialRisk ?? (isElite ? 15 : 0),
+    maxRisk: 100,
+    rewardMultiplier,
+    turnCount: 1,
+    marketIntent: {
+      title: isElite ? '高危加压' : '常规波动',
+      description: isElite
+        ? '奖励更好，但初始风险和目标线都更高。'
+        : '组成交易链，把浮盈推到目标线。'
+    },
+    status: 'ACTIVE',
+    nextTurnProfitMultiplier: 1,
+    initialRisk: preset.initialRisk ?? 0,
+    noiseCardsInDiscard: 0,
+    handCostPenalty: 0,
+    profitBonus: 0,
+    riskGainMultiplier: 1
   };
 }
 
-export function enterEnemyIntentPhase(state: EventGameState): EventGameState {
-  if (state.phase !== 'PLAYER_TURN') {
-    return state;
-  }
+export function createNewRun(traderId = 'old-hand', seed = 'redesign-run'): Run {
+  const trader = getTrader(traderId);
+  const rng = createRng(seed);
+  const deck = [...trader.startingDeckCardIds];
+  const shuffledDeck = rng.shuffle(deck);
 
-  if (state.marketPressure.hp <= 0) {
-    state.phase = 'REWARD';
-    state.encounterStatus = 'CLEARED';
-    return state;
-  }
-
-  state.phase = 'ENEMY_INTENT';
-  state.canResolveIntent = true;
-  state.intentResolvedThisTurn = false;
-  state.currentIntentId = state.marketPressure.intent.id;
-  state.combo.eventLog.push(`玩家回合结束：等待结算 ${state.marketPressure.intent.label}。`);
-  return state;
-}
-
-export function endEncounterTurn(state: EventGameState): EventGameState {
-  if (state.phase !== 'PLAYER_TURN') {
-    return state;
-  }
-
-  enterEnemyIntentPhase(state);
-  return settleEncounterTurn(state);
-}
-
-export function getEndTurnPreview(state: EventGameState) {
-  const intent = state.marketPressure.intent;
-  const handDiscardCount = state.hand.filter((card) => !card.retain).length;
-  const playedDiscardCount = state.playedCardsThisTurn.filter(
-    (card) => !card.exhaust
-  ).length;
-  const totalDiscardCount = handDiscardCount + playedDiscardCount;
-  const retainedCount = state.hand.length - handDiscardCount;
-  const nextDrawCount = Math.max(0, EVENT_HAND_SIZE - retainedCount);
-  const riskDelta = intent.type === 'RISK_ATTACK' ? intent.value ?? 0 : 0;
-  const projectedRisk = roundToTwoDecimals(state.risk + riskDelta);
-  const willDanger = projectedRisk >= state.maxRisk * 0.75;
-  const willBankrupt = projectedRisk >= state.maxRisk;
-  const noiseText =
-    intent.type === 'SUMMON_NOISE'
-      ? `，并加入 ${intent.value ?? 1} 张市场噪音`
-      : '';
-
-  return [
-    `敌方意图：${intent.label}。`,
-    `预计 Risk 变化：${riskDelta > 0 ? `+${riskDelta}` : '0'}${noiseText}。`,
-    `将弃置 ${totalDiscardCount} 张牌（手牌 ${handDiscardCount}，已打出 ${playedDiscardCount}）。`,
-    `下回合抽 ${nextDrawCount} 张。`,
-    willBankrupt
-      ? '警告：结算后会触发爆仓。'
-      : willDanger
-        ? '警告：结算后会进入危险 Risk 区间。'
-        : 'Risk 暂未进入危险区间。'
-  ].join(' ');
-}
-
-export function settleEncounterTurn(state: EventGameState): EventGameState {
-  if (
-    state.phase !== 'ENEMY_INTENT' ||
-    !state.canResolveIntent ||
-    state.intentResolvedThisTurn ||
-    state.lastResolvedIntentId === state.currentIntentId
-  ) {
-    state.combo.eventLog.push('本回合意图已结算。');
-    return state;
-  }
-
-  if (state.marketPressure.hp <= 0) {
-    state.phase = 'REWARD';
-    state.encounterStatus = 'CLEARED';
-    state.canResolveIntent = false;
-    state.intentResolvedThisTurn = true;
-    return state;
-  }
-
-  const intent = state.marketPressure.intent;
-  const riskBefore = state.risk;
-  const discardedHandCount = state.hand.filter((card) => !card.retain).length;
-  state.combo.eventLog.push(`公开意图结算：${intent.label}。${intent.description}`);
-  state.canResolveIntent = false;
-  state.intentResolvedThisTurn = true;
-  state.lastResolvedIntentId = intent.id;
-
-  resetIntentModifiers(state);
-  const isBankrupt = applyIntentBeforeDraw(state, intent);
-
-  if (isBankrupt) {
-    state.encounterStatus = 'LOST';
-    state.lastTurnSummary = `${intent.label}造成风险变化 +${roundToTwoDecimals(
-      state.risk - riskBefore
-    )}，本局失败。`;
-    return state;
-  }
-
-  const preparedState = discardContinuousTurn(state);
-  state.hand = preparedState.hand;
-  state.discardPile = preparedState.discardPile;
-  state.playedCardsThisTurn = preparedState.playedCardsThisTurn;
-  state.cardsDrawnThisTurn = preparedState.cardsDrawnThisTurn;
-  state.actionPoints = state.maxActionPoints;
-  state.ap = state.actionPoints;
-  state.bonusApGainsThisTurn = 0;
-  state.bonusDrawsThisTurn = 0;
-  state.copiesThisTurn = 0;
-  state.lastPlayedCard = null;
-  state.lastPlayedCost = null;
-  state.turboturnStep = 0;
-  state.turboturnMultiplier = 1;
-  state.resolvedEventTypes = [];
-  state.toolUseCounts = {};
-  state.traderPassiveUsesThisTurn = {};
-  state.triggeredComboMilestones = {};
-
-  drawOpeningHand(state);
-  const cardsDrawn = state.cardsDrawnThisTurn;
-  applyIntentAfterDraw(state, intent);
-
-  state.encounterTurn += 1;
-  state.currentTurn += 1;
-  state.marketPressure = {
-    ...state.marketPressure,
-    intent: createMarketIntent(
-      state.seed,
-      state.marketPressureIndex + state.encounterTurn
-    )
+  const run: Run = {
+    trader,
+    cash: trader.startingCash,
+    deck,
+    drawPile: shuffledDeck,
+    discardPile: [],
+    hand: [],
+    tools: [...trader.startingToolIds],
+    insurances: [],
+    currentEncounter: null,
+    act: 1,
+    nodeIndex: 0,
+    status: 'ROUTE_SELECT',
+    maxAP: DEFAULT_MAX_AP,
+    ap: DEFAULT_MAX_AP,
+    tradeChain: emptyChain(),
+    lastChainResult: null,
+    turnSummary: ['新局开始：选择你的第一条路线。'],
+    rngSeed: seed,
+    routeMap: createRouteMap(seed),
+    shop: createShop(seed),
+    currentEvent: null,
+    telemetry: createTelemetry(traderId),
+    toolTriggers: {},
+    encounterScopedToolUses: {},
+    nextCardCostReduction: 0,
+    apOverdraftAvailable: trader.startingToolIds.includes('redline-margin'),
+    freeTakeProfitAvailable: false,
+    pendingRewardCash: 0,
+    cardsRemovedCount: 0,
+    upgradedCardIds: []
   };
-  state.currentIntentId = state.marketPressure.intent.id;
-  state.intentResolvedThisTurn = false;
-  state.phase = 'PLAYER_TURN';
-  state.lastTurnSummary = `${intent.label}已结算：风险变化 ${formatDelta(
-    roundToTwoDecimals(state.risk - riskBefore)
-    )}，弃置 ${discardedHandCount} 张手牌，抽 ${cardsDrawn} 张牌。下一意图：${state.marketPressure.intent.label}。`;
-  state.combo.eventLog.push(state.lastTurnSummary);
 
-  return state;
+  return run;
 }
 
-function applyIntentBeforeDraw(state: EventGameState, intent: MarketIntent) {
-  if (intent.type === 'RISK_ATTACK') {
-    gainRiskFromIntent(state, intent.value ?? 0);
-  }
-
-  if (intent.type === 'SHIELD_UP') {
-    state.marketPressure = {
-      ...state.marketPressure,
-      shield: roundToTwoDecimals(state.marketPressure.shield + (intent.value ?? 0))
-    };
-    state.combo.eventLog.push(`MarketPressure 获得 ${intent.value ?? 0} shield。`);
-  }
-
-  if (intent.type === 'WEAKEN_SECTOR') {
-    state.weakenedSector = intent.sector ?? null;
-    state.combo.eventLog.push(`${intent.sector} 被削弱，本回合该板块收益降低。`);
-  }
-
-  if (intent.type === 'TAX_PROFIT') {
-    const ratio = intent.value ?? 0;
-    const taxed = roundToTwoDecimals(state.combo.currentChainProfit * ratio);
-    state.combo = {
-      ...state.combo,
-      currentChainProfit: roundToTwoDecimals(state.combo.currentChainProfit - taxed)
-    };
-    state.combo.eventLog.push(`浮盈征税扣除 ${taxed}。`);
-  }
-
-  if (intent.type === 'VOLATILITY_SPIKE') {
-    const multiplier = intent.value ?? 1.25;
-    state.intentProfitMultiplier = multiplier;
-    state.intentRiskMultiplier = multiplier;
-    state.combo.eventLog.push(`波动尖刺生效：收益和 risk 事件 x${multiplier.toFixed(2)}。`);
-  }
-
-  if (intent.type === 'SUMMON_NOISE') {
-    const count = intent.value ?? 1;
-    const noises = Array.from({ length: count }, (_, index) => ({
-      ...MARKET_NOISE_CARD,
-      id: `${MARKET_NOISE_CARD.id}-${state.day}-${state.marketPressureIndex}-${state.encounterTurn}-${index}`
-    }));
-    state.discardPile = [...state.discardPile, ...noises];
-    state.combo.eventLog.push(`市场噪音加入弃牌堆 x${count}。`);
-  }
-
-  return state.phase === 'RUN_LOST';
+export function startEncounter(run: Run, encounter: Encounter): Run {
+  const started = drawCards(
+    {
+      ...run,
+      status: 'PLAYER_TURN',
+      currentEncounter: encounter,
+      ap: run.maxAP,
+      tradeChain: emptyChain(),
+      toolTriggers: {},
+      encounterScopedToolUses: {},
+      insurances: run.insurances.filter((i) => !i.encounterScoped || !i.used),
+      apOverdraftAvailable: run.tools.includes('redline-margin'),
+      pendingRewardCash: 0
+    },
+    HAND_SIZE,
+    true
+  );
+  return applyQuantTerminalCostReduction(started);
 }
 
-function applyIntentAfterDraw(state: EventGameState, intent: MarketIntent) {
-  if (intent.type !== 'LOCK_HAND') {
-    return;
-  }
+export function drawCards(run: Run, count: number, isTurnStartDraw = false): Run {
+  const hand = [...run.hand];
+  let drawPile = [...run.drawPile];
+  let discardPile = [...run.discardPile];
+  const totalDraw = count + getDrawBonusForTurn(run, isTurnStartDraw);
 
-  const increase = intent.value ?? 1;
-  state.hand = state.hand.map((card) => {
-    if (card.cost > 1) {
-      return card;
+  for (let index = 0; index < totalDraw; index += 1) {
+    if (drawPile.length === 0 && discardPile.length > 0) {
+      drawPile = [...discardPile.filter((id) => id !== NOISE_GLITCH_CARD.id)];
+      discardPile = discardPile.filter((id) => id === NOISE_GLITCH_CARD.id);
     }
+    const cardId = drawPile.shift();
+    if (!cardId) break;
+    hand.push(cardId);
+  }
 
-    return {
-      ...card,
-      cost: Math.min(3, card.cost + increase) as EventCard['cost']
-    };
+  return { ...run, hand, drawPile, discardPile };
+}
+
+export function endTurn(run: Run): Run {
+  if (run.status !== 'PLAYER_TURN' || !run.currentEncounter) return run;
+
+  const encounter = {
+    ...run.currentEncounter,
+    turnCount: run.currentEncounter.turnCount + 1
+  };
+
+  const noiseFreeHand = run.hand.filter((id) => id !== NOISE_GLITCH_CARD.id);
+
+  let emptiedHandRun: Run = resetTurnToolTriggers({
+    ...run,
+    discardPile: [...run.discardPile, ...noiseFreeHand],
+    hand: [],
+    currentEncounter: encounter,
+    ap: run.maxAP,
+    tradeChain: emptyChain(),
+    turnSummary: [`第 ${encounter.turnCount} 回合：重新抽牌。`]
   });
-  state.combo.eventLog.push('锁手提费生效：低费手牌 cost +1。');
-}
 
-function drawOpeningHand(state: EventGameState) {
-  const drawCount = Math.max(0, EVENT_HAND_SIZE - state.hand.length);
-  const nextState = drawFromContinuousDeck(state, drawCount);
-
-  state.hand = nextState.hand;
-  state.drawPile = nextState.drawPile;
-  state.discardPile = nextState.discardPile;
-  state.reshuffleCount = nextState.reshuffleCount;
-  state.cardsDrawnThisTurn = nextState.cardsDrawnThisTurn;
-}
-
-function resetIntentModifiers(state: EventGameState) {
-  state.intentProfitMultiplier = 1;
-  state.intentRiskMultiplier = 1;
-  state.weakenedSector = null;
-}
-
-function gainRiskFromIntent(state: EventGameState, amount: number) {
-  state.risk = roundToTwoDecimals(state.risk + amount);
-  state.combo.currentChainRisk = roundToTwoDecimals(
-    state.combo.currentChainRisk + amount
-  );
-  state.combo.eventLog.push(`公开意图造成 risk +${amount}。`);
-
-  if (state.risk >= state.maxRisk) {
-    if (consumeLiquidationBufferFromIntent(state)) {
-      return;
-    }
-
-    if (consumeBossInsuranceFromIntent(state)) {
-      return;
-    }
-
-    state.phase = 'RUN_LOST';
-    state.encounterStatus = 'LOST';
-    state.runHistory.push(`爆仓：公开意图让 risk 达到 ${state.risk}/${state.maxRisk}。`);
-  }
-}
-
-function roundToTwoDecimals(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-function formatDelta(value: number) {
-  return value > 0 ? `+${value}` : `${value}`;
-}
-
-function consumeBossInsuranceFromIntent(state: EventGameState) {
-  const node = state.routeMap.currentNodeId
-    ? state.routeMap.acts
-        .flatMap((act) => act.nodes)
-        .find((routeNode) => routeNode.id === state.routeMap.currentNodeId)
-    : null;
-
-  if (node?.type !== 'BOSS' || !state.hasBossInsurance || state.bossInsuranceUsed) {
-    return false;
+  if (shouldInjectBossNoise(emptiedHandRun)) {
+    emptiedHandRun = {
+      ...emptiedHandRun,
+      hand: [NOISE_GLITCH_CARD.id],
+      currentEncounter: {
+        ...encounter,
+        noiseCardsInDiscard: encounter.noiseCardsInDiscard + 1
+      }
+    };
   }
 
-  state.hasBossInsurance = false;
-  state.bossInsuranceUsed = true;
-  state.risk = Math.max(0, state.maxRisk - 25);
-  state.combo = {
-    ...state.combo,
-    currentChainProfit: Math.round(state.combo.currentChainProfit * 0.5 * 100) / 100
+  const drawn = drawCards(emptiedHandRun, HAND_SIZE, true);
+  return applyQuantTerminalCostReduction(drawn);
+}
+
+export function applyGreedChoice(run: Run, choice: GreedChoice): Run {
+  if (run.status !== 'GREED_CHOICE' || !run.currentEncounter) return run;
+
+  recordGreedChoice(run, choice);
+
+  if (choice === 'TAKE_PROFIT') {
+    const takeProfitRatio = run.freeTakeProfitAvailable ? 0.85 : 0.7;
+    let cashGain = Math.floor(run.currentEncounter.floatingProfit * takeProfitRatio);
+    cashGain = applyTakeProfitTools(run, cashGain);
+    const nextRisk = Math.max(0, run.currentEncounter.risk - 15);
+
+    return finishEncounterReward(
+      applyInsuranceOnEncounterEnd({
+        ...run,
+        cash: run.cash + cashGain,
+        status: 'REWARD',
+        freeTakeProfitAvailable: false,
+        currentEncounter: {
+          ...run.currentEncounter,
+          risk: nextRisk,
+          status: 'REWARD'
+        },
+        turnSummary: [`止盈离场：获得 ${cashGain} 现金，风险 -15。`]
+      })
+    );
+  }
+
+  if (choice === 'HOLD') {
+    let rewardDelta = 0.5;
+    if (run.tools.includes('greed-compass')) rewardDelta += 0.25;
+    const withExitAlarm = grantExitAlarmFreeTakeProfit(run);
+    return continueGreedRun(withExitAlarm, {
+      riskDelta: 15,
+      rewardMultiplierDelta: rewardDelta,
+      nextTurnProfitMultiplier: 1,
+      summary: `继续持有：奖励倍率 +${Math.round(rewardDelta * 100)}%，风险 +15。你正在拿 ${run.currentEncounter.floatingProfit} 浮盈冒险。`
+    });
+  }
+
+  return continueGreedRun(run, {
+    riskDelta: 30,
+    rewardMultiplierDelta: 1,
+    nextTurnProfitMultiplier: 2,
+    summary: `加杠杆：下回合收益 x2，风险 +30。爆仓将损失 ${run.currentEncounter.floatingProfit} 浮盈。`
+  });
+}
+
+export function finishEncounterReward(run: Run): Run {
+  if (!run.currentEncounter) return run;
+  if (run.pendingRewardCash > 0 && run.currentEncounter.status === 'REWARD') {
+    return run;
+  }
+  const withInsurance = applyInsuranceOnEncounterEnd(run);
+  const bonus = Math.floor(withInsurance.currentEncounter!.cashReward * withInsurance.currentEncounter!.rewardMultiplier);
+  return {
+    ...withInsurance,
+    cash: withInsurance.cash + bonus,
+    pendingRewardCash: bonus,
+    turnSummary: [...withInsurance.turnSummary, `行情奖励：${bonus} 现金。`]
+  };
+}
+
+export function refreshTradeChainPreview(run: Run, selectedCardIds = run.tradeChain.selectedCardIds): Run {
+  if (!run.currentEncounter) return run;
+  const previewResult = selectedCardIds.length > 0 ? previewTradeChain(run, selectedCardIds) : null;
+
+  return {
+    ...run,
+    tradeChain: {
+      selectedCardIds,
+      maxCards: MAX_CHAIN_CARDS,
+      totalCost: previewResult?.totalCost ?? 0,
+      previewResult
+    }
+  };
+}
+
+export function handleBankruptcy(run: Run, reason: string): Run {
+  const { run: maybeSaved, prevented } = applyInsuranceOnBankruptcy(run);
+  if (prevented) {
+    recordBankruptcy(maybeSaved, `${reason}（保险生效）`);
+    return maybeSaved;
+  }
+  recordBankruptcy(run, reason);
+  return {
+    ...run,
+    status: 'RUN_LOST',
+    currentEncounter: run.currentEncounter
+      ? { ...run.currentEncounter, floatingProfit: 0, status: 'BANKRUPT' }
+      : null,
+    turnSummary: [`爆仓：${reason}，浮盈归零。`]
+  };
+}
+
+function continueGreedRun(
+  run: Run,
+  options: {
+    riskDelta: number;
+    rewardMultiplierDelta: number;
+    nextTurnProfitMultiplier: number;
+    summary: string;
+  }
+): Run {
+  if (!run.currentEncounter) return run;
+
+  const nextRisk = Math.min(run.currentEncounter.maxRisk, run.currentEncounter.risk + options.riskDelta);
+  const bankrupt = nextRisk >= run.currentEncounter.maxRisk;
+
+  if (bankrupt) {
+    return handleBankruptcy(
+      {
+        ...run,
+        currentEncounter: {
+          ...run.currentEncounter,
+          risk: nextRisk,
+          floatingProfit: 0,
+          status: 'BANKRUPT'
+        }
+      },
+      options.summary
+    );
+  }
+
+  const nextEncounter: Encounter = {
+    ...run.currentEncounter,
+    risk: nextRisk,
+    rewardMultiplier: run.currentEncounter.rewardMultiplier + options.rewardMultiplierDelta,
+    nextTurnProfitMultiplier: options.nextTurnProfitMultiplier,
+    status: 'ACTIVE'
   };
 
-  if (state.cash > 0) {
-    spendCash(state, Math.min(50, state.cash), 'Boss 保险理赔手续费');
-  }
+  const continuedRun: Run = {
+    ...run,
+    status: 'PLAYER_TURN',
+    currentEncounter: nextEncounter,
+    ap: run.maxAP,
+    tradeChain: emptyChain(),
+    turnSummary: [options.summary]
+  };
 
-  state.phase = 'ENEMY_INTENT';
-  state.encounterStatus = 'ACTIVE';
-  state.combo.eventLog.push('Boss 保险触发：避免爆仓，风险降至安全线以下。');
-  state.runHistory.push('Boss 保险触发：避免 Boss 战爆仓。');
-  return true;
+  const nextTurnRun = endTurn(continuedRun);
+  return { ...nextTurnRun, turnSummary: [options.summary, ...nextTurnRun.turnSummary] };
 }
 
-function consumeLiquidationBufferFromIntent(state: EventGameState) {
-  const buffer = state.consumables.find(
-    (item) => item.id === 'insurance-liquidation-buffer'
-  );
-
-  if (!buffer) return false;
-
-  state.consumables = state.consumables.filter((item) => item.id !== buffer.id);
-  state.hasBossInsurance = false;
-  state.bossInsuranceUsed = true;
-  state.risk = Math.max(0, state.maxRisk - 10);
-  state.phase = 'ENEMY_INTENT';
-  state.encounterStatus = 'ACTIVE';
-  state.combo.eventLog.push('爆仓缓冲触发：risk 降到安全线。');
-  return true;
+function emptyChain() {
+  return { selectedCardIds: [], maxCards: MAX_CHAIN_CARDS as 3, totalCost: 0, previewResult: null };
 }
+
+export function getCardName(cardId: string) {
+  return STOCK_CARDS.find((card) => card.id === cardId)?.name ?? cardId;
+}
+
+
+
+

@@ -1,429 +1,116 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import {
-  applyDayChoice,
-  getDayChoicePreviews,
-  type DayChoiceId,
-  type DayChoicePreview
-} from '../game/dayChoices';
-import {
-  applyRewardChoice,
-  enterDayEndAfterReward,
-  skipReward as applySkipReward,
-  startNextMarketPressure
-} from '../game/rewards';
-import { applyRestChoice, type RestChoiceId } from '../game/restSite';
-import { applyRouteEventChoice } from '../game/routeEvents';
-import { endEncounterTurn, settleEncounterTurn } from '../game/encounters';
-import { aggregateChainSummary } from '../game/feedback';
-import { completeCurrentRouteNode, selectRouteNode } from '../game/routeMap';
-import {
-  applyRiskControlAction,
-  buyShopItem,
-  refreshShop,
-  type RiskControlAction
-} from '../game/shop';
-import {
-  createFormalEventGameState,
-  playCard as playEventCard,
-  type EventGameState,
-  type EventGamePhase
-} from '../game/playCard';
-
-export type GameStatus = 'start' | EventGamePhase;
+  applyGreedChoice,
+  createNewRun,
+  endTurn,
+  finishEncounterReward,
+  refreshTradeChainPreview
+} from '../game/encounters';
+import { completeRouteNode, selectRouteNode } from '../game/routeMap';
+import { applyEventChoice } from '../game/routeEvents';
+import { applyRiskControlChoice, type RiskControlChoice } from '../game/riskControl';
+import { applyRestChoice, type RestChoice } from '../game/restSite';
+import { buyShopItem } from '../game/shop';
+import { canAddCardToChain, executeTradeChain } from '../game/playCard';
+import type { GreedChoice, Run } from '../game/types';
 
 interface GameStoreState {
-  lockedProfit: number;
-  gameStatus: GameStatus;
-  eventState: EventGameState | null;
+  run: Run | null;
+  selectedTraderId: string;
   startNewRun: (traderId?: string) => void;
   selectRouteNode: (nodeId: string) => void;
   completeRouteNode: () => void;
-  playCard: (cardId: string) => void;
+  addCardToChain: (cardId: string) => void;
+  removeCardFromChain: (index: number) => void;
+  executeChain: () => void;
   endTurn: () => void;
-  buyShopItem: (itemId: string) => void;
-  refreshShop: () => void;
-  applyRiskControlAction: (action: RiskControlAction, cardId?: string) => void;
-  applyRestChoice: (choice: RestChoiceId, cardId?: string) => void;
-  applyRouteEventChoice: (choiceId: string) => void;
-  selectReward: (rewardId: string) => void;
-  skipReward: () => void;
-  continueAfterReward: () => void;
-  endDayAfterReward: () => void;
-  chooseDayEnd: (choice: DayChoiceId) => void;
-  resetRun: () => void;
+  chooseGreed: (choice: GreedChoice) => void;
+  buyShopItem: (itemId: string, cardId?: string) => void;
+  applyRestChoice: (choice: RestChoice, cardId?: string) => void;
+  applyRiskControlChoice: (choice: RiskControlChoice, cardId?: string, insuranceId?: string) => void;
+  applyEventChoice: (choiceId: string) => void;
+  leaveNode: () => void;
 }
 
-function resetActionFeedback(state: EventGameState) {
-  state.resolvedEventsThisAction = [];
-  state.cashTransactionsThisAction = [];
-  state.lastChainSummary = aggregateChainSummary([]);
-}
-
-function cloneEventState(state: EventGameState): EventGameState {
-  return {
-    ...state,
-    hand: [...state.hand],
-    drawPile: [...state.drawPile],
-    discardPile: [...state.discardPile],
-    playedCardsThisTurn: [...state.playedCardsThisTurn],
-    removedCards: [...state.removedCards],
-    combo: {
-      ...state.combo,
-      eventLog: [...state.combo.eventLog]
-    },
-    marketPressure: { ...state.marketPressure },
-    routeMap: {
-      ...state.routeMap,
-      acts: state.routeMap.acts.map((act) => ({
-        ...act,
-        nodes: act.nodes.map((node) => ({
-          ...node,
-          nextNodeIds: [...node.nextNodeIds]
-        }))
-      })),
-      completedNodeIds: [...state.routeMap.completedNodeIds],
-      availableNodeIds: [...state.routeMap.availableNodeIds]
-    },
-    shop: {
-      ...state.shop,
-      sections: {
-        cards: state.shop.sections.cards.map((item) => ({ ...item })),
-        tools: state.shop.sections.tools.map((item) => ({ ...item })),
-        insurance: state.shop.sections.insurance.map((item) => ({ ...item })),
-        services: state.shop.sections.services.map((item) => ({ ...item }))
-      },
-      items: state.shop.items.map((item) => ({ ...item }))
-    },
-    tools: [...state.tools],
-    consumables: [...state.consumables],
-    rewardChoices: [...state.rewardChoices],
-    runHistory: [...state.runHistory],
-    resolvedEventTypes: [...state.resolvedEventTypes],
-    resolvedEventsThisAction: [...state.resolvedEventsThisAction],
-    cashTransactions: [...state.cashTransactions],
-    cashTransactionsThisAction: [...state.cashTransactionsThisAction],
-    lastChainSummary: {
-      ...state.lastChainSummary,
-      keyEvents: [...state.lastChainSummary.keyEvents]
-    },
-    toolUseCounts: { ...state.toolUseCounts },
-    triggeredComboMilestones: Object.fromEntries(
-      Object.entries(state.triggeredComboMilestones).map(([toolId, thresholds]) => [
-        toolId,
-        [...thresholds]
-      ])
-    ),
-    traderPassiveUsesThisTurn: { ...state.traderPassiveUsesThisTurn }
-  };
+function withReward(run: Run): Run {
+  if (run.status === 'REWARD') {
+    return finishEncounterReward(run);
+  }
+  return run;
 }
 
 export const useGameStore = create<GameStoreState>((set, get) => ({
-  lockedProfit: 0,
-  gameStatus: 'start',
-  eventState: null,
+  run: null,
+  selectedTraderId: 'old-hand',
   startNewRun: (traderId = 'old-hand') => {
-    const eventState = createFormalEventGameState({
-      phase: 'ROUTE_SELECT',
-      encounterStatus: 'ACTIVE'
-    }, traderId);
-
-    set({
-      lockedProfit: 0,
-      gameStatus: eventState.phase,
-      eventState
-    });
+    set({ run: createNewRun(traderId), selectedTraderId: traderId });
   },
   selectRouteNode: (nodeId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'ROUTE_SELECT') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = selectRouteNode(nextState, nodeId);
-    nextState.combo.eventLog.push(result.message);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+    const { run } = get();
+    if (!run) return;
+    set({ run: selectRouteNode(run, nodeId) });
   },
   completeRouteNode: () => {
-    const { eventState, gameStatus } = get();
-
-    if (
-      !eventState ||
-      !['SHOP', 'REST', 'DAY_END', 'REWARD'].includes(gameStatus)
-    ) {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = completeCurrentRouteNode(nextState);
-    nextState.combo.eventLog.push(result.message);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+    const { run } = get();
+    if (!run) return;
+    set({ run: completeRouteNode(run) });
   },
-  playCard: (cardId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'PLAYER_TURN') {
-      return;
-    }
-
-    const nextState = playEventCard(eventState, cardId);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+  addCardToChain: (cardId) => {
+    const { run } = get();
+    if (!run || run.status !== 'PLAYER_TURN' || !run.currentEncounter || !run.hand.includes(cardId)) return;
+    if (!canAddCardToChain(run.tradeChain.selectedCardIds)) return;
+    const handCopies = run.hand.filter((item) => item === cardId).length;
+    const selectedCopies = run.tradeChain.selectedCardIds.filter((item) => item === cardId).length;
+    if (selectedCopies >= handCopies) return;
+    const selectedCardIds = [...run.tradeChain.selectedCardIds, cardId];
+    set({ run: refreshTradeChainPreview(run, selectedCardIds) });
+  },
+  removeCardFromChain: (index) => {
+    const { run } = get();
+    if (!run) return;
+    const selectedCardIds = run.tradeChain.selectedCardIds.filter((_, i) => i !== index);
+    set({ run: refreshTradeChainPreview(run, selectedCardIds) });
+  },
+  executeChain: () => {
+    const { run } = get();
+    if (!run) return;
+    set({ run: withReward(executeTradeChain(run)) });
   },
   endTurn: () => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState) {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    if (gameStatus === 'PLAYER_TURN') {
-      endEncounterTurn(nextState);
-    } else if (gameStatus === 'ENEMY_INTENT') {
-      settleEncounterTurn(nextState);
-    } else {
-      return;
-    }
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+    const { run } = get();
+    if (!run) return;
+    set({ run: endTurn(run) });
   },
-  buyShopItem: (itemId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'SHOP') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = buyShopItem(nextState, itemId);
-    nextState.combo.eventLog.push(result.message);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+  chooseGreed: (choice) => {
+    const { run } = get();
+    if (!run) return;
+    set({ run: withReward(applyGreedChoice(run, choice)) });
   },
-  refreshShop: () => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'SHOP') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = refreshShop(nextState);
-    nextState.combo.eventLog.push(result.message);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
-  },
-  applyRiskControlAction: (action, cardId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'REST') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = applyRiskControlAction(nextState, action, cardId);
-    nextState.combo.eventLog.push(result.message);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+  buyShopItem: (itemId, cardId) => {
+    const { run } = get();
+    if (!run) return;
+    set({ run: buyShopItem(run, itemId, cardId) });
   },
   applyRestChoice: (choice, cardId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'REST') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = applyRestChoice(nextState, choice, cardId);
-    nextState.combo.eventLog.push(result.message);
-
-    if (result.success) {
-      completeCurrentRouteNode(nextState);
-    }
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+    const { run } = get();
+    if (!run) return;
+    set({ run: applyRestChoice(run, choice, cardId) });
   },
-  applyRouteEventChoice: (choiceId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'DAY_END') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = applyRouteEventChoice(nextState, choiceId);
-    nextState.combo.eventLog.push(result.message);
-
-    if (result.success) {
-      completeCurrentRouteNode(nextState);
-    }
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+  applyRiskControlChoice: (choice, cardId, insuranceId) => {
+    const { run } = get();
+    if (!run) return;
+    set({ run: applyRiskControlChoice(run, choice, cardId, insuranceId) });
   },
-  selectReward: (rewardId) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'REWARD') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = applyRewardChoice(nextState, rewardId);
-
-    nextState.combo.eventLog.push(result.message);
-    if (nextState.routeMap.currentNodeId) {
-      completeCurrentRouteNode(nextState);
-    } else {
-      enterDayEndAfterReward(nextState);
-    }
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
+  applyEventChoice: (choiceId) => {
+    const { run } = get();
+    if (!run) return;
+    set({ run: applyEventChoice(run, choiceId) });
   },
-  skipReward: () => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'REWARD') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    const result = applySkipReward(nextState);
-
-    nextState.combo.eventLog.push(result.message);
-    if (nextState.routeMap.currentNodeId) {
-      completeCurrentRouteNode(nextState);
-    } else {
-      enterDayEndAfterReward(nextState);
-    }
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
-  },
-  continueAfterReward: () => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'REWARD') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    startNextMarketPressure(nextState);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
-  },
-  endDayAfterReward: () => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'REWARD') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    enterDayEndAfterReward(nextState);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
-  },
-  chooseDayEnd: (choice) => {
-    const { eventState, gameStatus } = get();
-
-    if (!eventState || gameStatus !== 'DAY_END') {
-      return;
-    }
-
-    const nextState = cloneEventState(eventState);
-    resetActionFeedback(nextState);
-    applyDayChoice(nextState, choice);
-
-    set({
-      eventState: nextState,
-      gameStatus: nextState.phase,
-      lockedProfit: nextState.lockedProfit
-    });
-  },
-  resetRun: () => {
-    set({
-      lockedProfit: 0,
-      gameStatus: 'start',
-      eventState: null
-    });
+  leaveNode: () => {
+    const { run } = get();
+    if (!run) return;
+    set({ run: completeRouteNode(run) });
   }
 }));
 
-export function getFloatingProfit(state: EventGameState | null) {
-  return state?.combo.currentChainProfit ?? 0;
-}
 
-export function getDayEndChoicePreviews(
-  state: EventGameState | null
-): DayChoicePreview[] {
-  return state ? getDayChoicePreviews(state) : [];
-}
-
-export type { DayChoiceId, RestChoiceId, RiskControlAction };
