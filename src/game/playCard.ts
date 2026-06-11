@@ -73,6 +73,12 @@ export interface EventGameState {
   actionPoints: number;
   maxActionPoints: number;
   baseMaxAp: number;
+  bonusApGainsThisTurn: number;
+  maxBonusApGainsPerTurn: number;
+  bonusDrawsThisTurn: number;
+  maxBonusDrawsPerTurn: number;
+  copiesThisTurn: number;
+  maxCopiesPerTurn: number;
   risk: number;
   maxRisk: number;
   baseMaxRisk: number;
@@ -163,11 +169,17 @@ export function createTestEventGameState(
     discardPile: [],
     playedCardsThisTurn: [],
     removedCards: [],
-    ap: 6,
-    maxAp: 6,
-    actionPoints: 6,
-    maxActionPoints: 6,
-    baseMaxAp: 6,
+    ap: 3,
+    maxAp: 3,
+    actionPoints: 3,
+    maxActionPoints: 3,
+    baseMaxAp: 3,
+    bonusApGainsThisTurn: 0,
+    maxBonusApGainsPerTurn: 1,
+    bonusDrawsThisTurn: 0,
+    maxBonusDrawsPerTurn: 2,
+    copiesThisTurn: 0,
+    maxCopiesPerTurn: 1,
     risk: 0,
     maxRisk: 100,
     baseMaxRisk: 100,
@@ -385,7 +397,7 @@ function createTurboturnEvents(
         type: 'TURBOTURN_COMPLETE',
         sourceId: card.id,
         sourceName: card.name,
-        message: '完整 Turboturn：0 → 1 → 2 → 3 成立，combo +1 并抽 1 张牌。',
+        message: '完整 Turboturn：0 → 1 → 2 → 3 成立，combo +1 并获得 10 收益。',
         value: state.turboturnStep
       }),
       state.createEvent({
@@ -396,11 +408,12 @@ function createTurboturnEvents(
         value: 1
       }),
       state.createEvent({
-        type: 'CARD_DRAWN',
+        type: 'PROFIT_GAINED',
         sourceId: card.id,
         sourceName: card.name,
-        message: `${card.name} 完整 Turboturn 奖励：抽 1 张牌。`,
-        value: 1
+        message: `${card.name} 完整 Turboturn 奖励：获得 10 收益。`,
+        value: 10,
+        meta: { sector: card.sector }
       })
     );
   }

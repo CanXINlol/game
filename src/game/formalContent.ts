@@ -543,7 +543,7 @@ function withTurboturnShape(card: FormalEventCardDefinition): EventCard {
 
 function getCostForCardType(cardType: FormalCardType): EventCardCost {
   if (cardType === 'DRAW' || cardType === 'CASH_OUT') {
-    return 0;
+    return 1;
   }
 
   if (cardType === 'BUY' || cardType === 'DIP_BUY' || cardType === 'SECTOR') {

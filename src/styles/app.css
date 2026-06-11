@@ -373,6 +373,319 @@ button.event-card:disabled {
   }
 }
 
+/* Final readability pass: card playability uses brightness, not action labels. */
+.combat-card {
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    filter 0.16s ease,
+    transform 0.16s ease;
+}
+
+.combat-card:not(.disabled-card) {
+  filter: brightness(1.05);
+}
+
+.event-card.disabled-card {
+  filter: brightness(0.68) saturate(0.82);
+}
+
+.event-card.disabled-card strong,
+.event-card.disabled-card p,
+.event-card.disabled-card span,
+.event-card.disabled-card small {
+  color: rgba(245, 240, 232, 0.62);
+}
+
+.play-reason {
+  min-height: 18px;
+}
+
+.risk-control-option:hover:not(:disabled),
+.risk-card-option:hover:not(:disabled) {
+  border-color: rgba(240, 195, 106, 0.48);
+  background: rgba(240, 195, 106, 0.08);
+  color: #fff8eb;
+}
+
+.risk-control-option:hover:not(:disabled) strong,
+.risk-card-option:hover:not(:disabled) strong,
+.risk-control-option:hover:not(:disabled) p,
+.risk-card-option:hover:not(:disabled) span,
+.risk-card-option:hover:not(:disabled) em {
+  color: inherit;
+}
+
+.risk-control-option.selected:hover:not(:disabled),
+.risk-card-option.selected:hover:not(:disabled) {
+  background: rgba(240, 195, 106, 0.14);
+  color: #fff8eb;
+}
+
+.risk-control-option:disabled,
+.risk-card-option:disabled {
+  opacity: 1;
+  filter: brightness(0.72) saturate(0.85);
+}
+
+.day-choice-card span {
+  overflow-wrap: anywhere;
+}
+
+/* Keep route map hover consistent with shop/rest cards: no bright wash. */
+.route-node {
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    filter 0.16s ease,
+    transform 0.16s ease;
+}
+
+.route-node:hover:not(:disabled) {
+  border-color: rgba(240, 195, 106, 0.48);
+  background: rgba(240, 195, 106, 0.08);
+  color: #fff8eb;
+  transform: translateY(-1px);
+}
+
+.route-node:hover:not(:disabled) strong,
+.route-node:hover:not(:disabled) span,
+.route-node:hover:not(:disabled) small {
+  color: inherit;
+}
+
+.route-node-available {
+  border-color: rgba(240, 195, 106, 0.44);
+  background: rgba(240, 195, 106, 0.075);
+}
+
+.route-node-available:hover:not(:disabled) {
+  border-color: rgba(240, 195, 106, 0.58);
+  background: rgba(240, 195, 106, 0.095);
+}
+
+.route-node-current,
+.route-node-current:hover:not(:disabled) {
+  border-color: rgba(82, 166, 113, 0.68);
+  background: rgba(82, 166, 113, 0.12);
+}
+
+.route-node:disabled {
+  opacity: 1;
+  filter: brightness(0.72) saturate(0.85);
+}
+
+.route-node:disabled strong,
+.route-node:disabled span,
+.route-node:disabled small {
+  color: rgba(245, 240, 232, 0.58);
+}
+
+.route-node-locked:disabled strong,
+.route-node-locked:disabled span,
+.route-node-locked:disabled small {
+  color: rgba(245, 240, 232, 0.46);
+}
+
+.route-map-panel .section-heading,
+.route-map-panel .current-route-node,
+.route-map-panel .route-node,
+.shop-card,
+.reward-card,
+.choice-card {
+  line-height: 1.45;
+}
+
+.route-map-panel .status-pill,
+.route-map-panel .primary-action {
+  padding-inline: 14px;
+}
+
+/* Spire-like structural map: original art-free, bottom-to-top branch graph. */
+.route-act-list-current {
+  display: block;
+}
+
+.route-map-canvas {
+  position: relative;
+  min-height: clamp(560px, 72vh, 840px);
+  margin-top: 12px;
+  border: 1px solid rgba(245, 240, 232, 0.08);
+  border-radius: 8px;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(245, 240, 232, 0.035), rgba(0, 0, 0, 0.12)),
+    rgba(0, 0, 0, 0.12);
+  overflow: visible;
+}
+
+.route-map-edges {
+  position: absolute;
+  inset: 42px 50px;
+  width: calc(100% - 100px);
+  height: calc(100% - 84px);
+  pointer-events: none;
+}
+
+.route-map-canvas .route-node {
+  position: absolute;
+  z-index: 2;
+  width: 74px;
+  min-height: 74px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  padding: 8px;
+  text-align: center;
+  transform: translate(-50%, 50%);
+  overflow: visible;
+}
+
+.route-map-canvas .route-node:hover:not(:disabled) {
+  transform: translate(-50%, 50%) translateY(-2px);
+}
+
+.route-node-icon {
+  font-size: 1.15rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.route-node-title {
+  max-width: 82px;
+  color: rgba(245, 240, 232, 0.78);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.route-node-check {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #102116;
+  background: #70c388;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.route-node-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 8;
+  width: min(260px, 70vw);
+  display: none;
+  gap: 4px;
+  border: 1px solid rgba(240, 195, 106, 0.32);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #f5f0e8;
+  background: rgba(18, 14, 10, 0.96);
+  text-align: left;
+  transform: translateX(-50%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+  pointer-events: none;
+}
+
+.route-node:hover .route-node-tooltip {
+  display: grid;
+}
+
+.route-node-tooltip strong,
+.route-node-tooltip em,
+.route-node-tooltip small,
+.route-node-tooltip span {
+  color: inherit;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.route-node-tooltip em {
+  color: rgba(240, 195, 106, 0.92);
+  font-weight: 800;
+}
+
+.route-node-type-elite-market {
+  border-color: rgba(231, 104, 86, 0.76);
+  background: rgba(112, 25, 22, 0.28);
+}
+
+.route-node-type-event {
+  border-style: dashed;
+}
+
+.route-node-type-shop {
+  border-color: rgba(97, 174, 211, 0.56);
+}
+
+.route-node-type-rest {
+  border-color: rgba(112, 195, 136, 0.56);
+}
+
+.route-node-type-risk-control {
+  border-color: rgba(165, 191, 233, 0.56);
+}
+
+.route-node-type-boss {
+  width: 106px;
+  min-height: 92px;
+  border-radius: 14px;
+  border-color: rgba(231, 104, 86, 0.88);
+  background: rgba(91, 18, 18, 0.42);
+}
+
+.route-node-type-boss .route-node-icon {
+  font-size: 1.5rem;
+}
+
+.route-node-type-boss .route-node-title {
+  max-width: 104px;
+  font-size: 0.76rem;
+}
+
+.route-map-canvas .route-node-locked:disabled {
+  filter: brightness(0.52) saturate(0.68);
+}
+
+.route-map-canvas .route-node-available {
+  box-shadow: 0 0 0 3px rgba(240, 195, 106, 0.12);
+}
+
+.route-map-canvas .route-node-current,
+.route-map-canvas .route-node-completed {
+  box-shadow: 0 0 0 3px rgba(112, 195, 136, 0.12);
+}
+
+@media (max-width: 760px) {
+  .route-map-canvas {
+    min-height: 620px;
+    padding: 18px;
+  }
+
+  .route-map-edges {
+    inset: 38px 34px;
+    width: calc(100% - 68px);
+    height: calc(100% - 76px);
+  }
+
+  .route-map-canvas .route-node {
+    width: 62px;
+    min-height: 62px;
+  }
+
+  .route-node-title {
+    font-size: 0.62rem;
+  }
+}
+
 .start-screen {
   display: grid;
   place-items: center;
@@ -1418,8 +1731,13 @@ button:focus-visible,
 .route-act {
   border: 1px solid rgba(245, 240, 232, 0.1);
   border-radius: 8px;
-  padding: 12px;
+  padding: 16px;
   background: rgba(255, 255, 255, 0.025);
+}
+
+.route-act-active {
+  border-color: rgba(240, 195, 106, 0.2);
+  background: rgba(245, 240, 232, 0.035);
 }
 
 .route-act h3 {
@@ -1427,9 +1745,15 @@ button:focus-visible,
   color: #fff8eb;
 }
 
-.route-layer-list {
+.route-layer-list,
+.route-graph {
   display: grid;
-  gap: 10px;
+  gap: 4px;
+}
+
+.route-graph-step {
+  display: grid;
+  gap: 0;
 }
 
 .route-layer {
@@ -1456,7 +1780,7 @@ button:focus-visible,
   align-content: start;
   border: 1px solid rgba(245, 240, 232, 0.1);
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   color: rgba(245, 240, 232, 0.68);
   background: rgba(245, 240, 232, 0.035);
   text-align: left;
@@ -1474,7 +1798,7 @@ button:focus-visible,
 
 .route-node small {
   color: rgba(245, 240, 232, 0.62);
-  line-height: 1.35;
+  line-height: 1.45;
 }
 
 .route-node-available {
@@ -1489,6 +1813,34 @@ button:focus-visible,
 
 .route-node-completed {
   opacity: 0.72;
+}
+
+.route-node-locked {
+  opacity: 1;
+  filter: brightness(0.58) saturate(0.72);
+}
+
+.route-connectors {
+  width: 100%;
+  height: 34px;
+  overflow: visible;
+}
+
+.route-connector,
+.route-connector-active {
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.route-connector {
+  stroke: rgba(245, 240, 232, 0.16);
+  stroke-width: 2;
+}
+
+.route-connector-active {
+  stroke: rgba(240, 195, 106, 0.58);
+  stroke-width: 2.6;
+  filter: drop-shadow(0 0 4px rgba(240, 195, 106, 0.16));
 }
 
 .current-route-node {

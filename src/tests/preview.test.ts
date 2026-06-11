@@ -18,14 +18,16 @@ describe('card preview', () => {
   });
 
   it('detects Turboturn progress and interruption', () => {
-    const zeroCost = FORMAL_EVENT_CARDS.find((card) => card.cost === 0);
-    const twoCost = FORMAL_EVENT_CARDS.find((card) => card.cost === 2);
+    const template = FORMAL_EVENT_CARDS.find((card) => card.id === 'formal-tech-001');
     const state = createTestEventGameState({ lastPlayedCost: 0 });
 
-    if (!zeroCost || !twoCost) throw new Error('Expected preview cards.');
+    if (!template) throw new Error('Expected preview card.');
+
+    const oneCost = { ...template, cost: 1 as const };
+    const twoCost = { ...template, cost: 2 as const };
 
     expect(createCardPreview(twoCost, state).notes).toContain('会中断极速连锁');
-    expect(createCardPreview(zeroCost, state).notes).toContain('可推进极速连锁');
+    expect(createCardPreview(oneCost, state).notes).toContain('可推进极速连锁');
   });
 
   it('detects possible MarketPressure clear', () => {

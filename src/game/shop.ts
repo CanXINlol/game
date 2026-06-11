@@ -134,7 +134,7 @@ function createInsuranceItems(state: EventGameState): ShopItem[] {
       type: 'INSURANCE',
       insuranceType: 'LIQUIDATION_BUFFER',
       title: '爆仓缓冲',
-      description: '本节点第一次爆仓时，risk 降到 maxRisk - 10。',
+      description: '一次性保险：本节点第一次爆仓时阻止失败，保住当前浮盈，并把风险降到爆仓线 -10。',
       price: getInsurancePrice(state, ECONOMY_PRICES.liquidationBuffer),
       sold: false
     },
@@ -143,7 +143,7 @@ function createInsuranceItems(state: EventGameState): ShopItem[] {
       type: 'INSURANCE',
       insuranceType: 'PROFIT_LOCK',
       title: '收益锁',
-      description: '下个节点结束时自动锁定 40% floatingProfit。',
+      description: '一次性保险：下个节点结束时自动把 40% 浮盈转为现金。',
       price: getInsurancePrice(state, ECONOMY_PRICES.profitLockInsurance),
       sold: false
     },
@@ -152,7 +152,7 @@ function createInsuranceItems(state: EventGameState): ShopItem[] {
       type: 'INSURANCE',
       insuranceType: 'RISK_HEDGE',
       title: '风险对冲',
-      description: '下个节点 risk_GAINED 降低 30%。',
+      description: '一次性保险：下个节点获得风险时降低 30%，适合加杠杆前购买。',
       price: getInsurancePrice(state, ECONOMY_PRICES.riskHedgeInsurance),
       sold: false
     }

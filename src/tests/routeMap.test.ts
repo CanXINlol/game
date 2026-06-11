@@ -4,8 +4,11 @@ import {
   applyRunFailureConditions,
   completeCurrentRouteNode,
   createRouteMap,
+  generateRouteMap,
+  getAvailableNextNodes,
   getRouteNode,
-  selectRouteNode
+  selectRouteNode,
+  validateRouteMap
 } from '../game/routeMap';
 
 describe('route map run structure', () => {
@@ -21,6 +24,13 @@ describe('route map run structure', () => {
     expect(routeMap.acts[2].nodes.at(-1)?.title).toBe('最后一根阳线');
   });
 
+  it('generates the same route map for the same seed and act', () => {
+    const first = generateRouteMap('stable-route', 2);
+    const second = generateRouteMap('stable-route', 2);
+
+    expect(first).toEqual(second);
+  });
+
   it('uses styled route node display names instead of system labels', () => {
     const routeMap = createRouteMap('route-seed');
     const names = routeMap.acts.flatMap((act) => act.nodes.map((node) => node.title));
@@ -32,7 +42,7 @@ describe('route map run structure', () => {
     expect(names.some((name) => ['龙虎榜幽灵', '杠杆围城', '跌停回廊', '量化黑箱', '熔断前夜', '高位接盘局'].includes(name))).toBe(true);
   });
 
-  it('offers 2 to 3 choices per non-boss layer', () => {
+  it('offers 2 to 5 nodes per non-boss layer with 2 to 3 starts', () => {
     const routeMap = createRouteMap('route-seed');
 
     for (const act of routeMap.acts) {
@@ -45,19 +55,47 @@ describe('route map run structure', () => {
       for (const [layer, count] of layers) {
         const isBossLayer = layer === Math.max(...layers.keys());
         expect(count).toBeGreaterThanOrEqual(isBossLayer ? 1 : 2);
-        expect(count).toBeLessThanOrEqual(isBossLayer ? 1 : 3);
+        expect(count).toBeLessThanOrEqual(isBossLayer ? 1 : 5);
+
+        if (layer === 1) {
+          expect(count).toBeLessThanOrEqual(3);
+        }
       }
     }
   });
 
-  it('does not generate special nodes in the first three Act 1 layers', () => {
+  it('starts each Act with combat, allows events from layer two, and guarantees safety before Boss', () => {
     const routeMap = createRouteMap('route-seed');
-    const earlyNodes = routeMap.acts[0].nodes.filter((node) => node.layer <= 3);
 
-    expect(earlyNodes.length).toBeGreaterThan(0);
-    expect(
-      earlyNodes.every((node) => node.type === 'NORMAL_MARKET' || node.type === 'REST')
-    ).toBe(true);
+    for (const act of routeMap.acts) {
+      const firstLayer = act.nodes.filter((node) => node.layer === 1);
+      const secondLayer = act.nodes.filter((node) => node.layer === 2);
+      const actOneEarly = act.nodes.filter((node) => act.act === 1 && node.layer <= 3);
+      const preBossLayer = act.nodes.filter(
+        (node) => node.layer === Math.max(...act.nodes.map((item) => item.layer)) - 1
+      );
+
+      expect(firstLayer.every((node) => node.type === 'NORMAL_MARKET')).toBe(true);
+      expect(secondLayer.some((node) => node.type === 'EVENT')).toBe(true);
+      expect(
+        actOneEarly.every(
+          (node) => node.type !== 'ELITE_MARKET' && node.type !== 'SHOP'
+        )
+      ).toBe(true);
+      expect(
+        preBossLayer.some((node) =>
+          ['REST', 'SHOP', 'RISK_CONTROL'].includes(node.type)
+        )
+      ).toBe(true);
+    }
+  });
+
+  it('validates that every node is reachable and can reach Boss', () => {
+    const routeMap = createRouteMap('route-seed');
+    const result = validateRouteMap(routeMap);
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 
   it('only allows selecting reachable nodes', () => {
@@ -112,6 +150,9 @@ describe('route map run structure', () => {
     expect(state.phase).toBe('ROUTE_SELECT');
     expect(state.routeMap.completedNodeIds).toContain(firstNode.id);
     expect(state.routeMap.availableNodeIds).toEqual(firstNode.nextNodeIds);
+    expect(getAvailableNextNodes(state.routeMap).map((node) => node.id)).toEqual(
+      firstNode.nextNodeIds
+    );
   });
 
   it('event nodes open an event choice instead of auto-resolving', () => {

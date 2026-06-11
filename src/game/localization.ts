@@ -27,6 +27,7 @@ export const GAME_EVENT_TYPE_LABELS = {
   LEVERAGE_ADDED: '杠杆增加',
   CARD_COPIED: '复制卡牌',
   CARD_DRAWN: '抽牌',
+  AP_GAINED: '行动点增加',
   CASH_OUT: '止盈',
   LOSS_TAKEN: '承受亏损',
   TRADE_ENDED: '结束交易',

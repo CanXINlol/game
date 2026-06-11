@@ -172,7 +172,7 @@ describe('event-driven core', () => {
 
     expect(state.hand.map((card) => card.id)).toContain('test-card-short-cover');
     expect(log).toContain('热点轮动 触发 TECH 板块。');
-    expect(log).toContain('热点轮动 抽 1 张测试牌。');
+    expect(log).toContain('热点轮动 抽 1 张牌。');
   });
 
   it('量化终端 listens to CARD_COPIED, draws a card, and adds combo', () => {
@@ -183,7 +183,7 @@ describe('event-driven core', () => {
     expect(secondState.hand.map((card) => card.id)).toContain('test-card-short-cover');
     expect(secondState.combo.comboCount).toBeGreaterThan(firstState.combo.comboCount);
     expect(log).toContain('量化终端 被触发。');
-    expect(log).toContain('量化终端 抽 1 张测试牌。');
+    expect(log).toContain('量化终端 抽 1 张牌。');
   });
 
   it('止盈保险 and 现金保险箱 lock profit and reduce risk without looping forever', () => {
@@ -208,7 +208,12 @@ describe('event-driven core', () => {
   });
 
   it('妖股点火 creates a tool chain and can push comboCount above 5', () => {
-    const firstState = playCard(createTestEventGameState(), 'test-card-tech-buy');
+    const firstState = playCard(createTestEventGameState({
+      actionPoints: 6,
+      ap: 6,
+      maxActionPoints: 6,
+      maxAp: 6
+    }), 'test-card-tech-buy');
     const secondState = playCard(firstState, 'test-card-limit-chase');
     const thirdState = playCard(secondState, 'test-card-hot-stock-ignite');
     const log = thirdState.combo.eventLog.join('\n');

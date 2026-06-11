@@ -71,7 +71,7 @@ export const ROUTE_NODE_CONTENT: Record<RouteNodeType, RouteNodeContent> = {
 };
 
 export const ACT_LAYER_COUNTS = {
-  1: 7,
-  2: 8,
-  3: 9
+  1: 8,
+  2: 9,
+  3: 10
 } as const;

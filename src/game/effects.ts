@@ -64,6 +64,7 @@ export type CardEffect =
   | { type: 'TRIGGER_LIMIT_UP_IF_PROFIT'; profit: number; comboGain: number }
   | { type: 'COPY_PREVIOUS_CARD' }
   | { type: 'DRAW_CARD'; value: number }
+  | { type: 'GAIN_AP'; value: number }
   | { type: 'CASH_OUT'; ratio: number; riskReduction: number }
   | { type: 'GAIN_PROFIT_FROM_COMBO'; profitPerCombo: number }
   | { type: 'REBOUND_IF_EVENT'; eventTypes: GameEventType[]; profit: number; riskReduction: number }
@@ -94,6 +95,7 @@ export type ToolEventEffect =
   | { type: 'GAIN_RISK'; value: number }
   | { type: 'REDUCE_RISK'; value: number }
   | { type: 'DRAW_CARD'; value: number }
+  | { type: 'GAIN_AP'; value: number }
   | { type: 'LOCK_FLOATING_PROFIT'; ratio: number }
   | { type: 'GAIN_PROFIT_BY_COMBO_THRESHOLD'; values: Record<number, number> };
 
@@ -368,6 +370,18 @@ export function createCardEffectEvents(
     if (effect.type === 'COPY_PREVIOUS_CARD' && !options.copied) {
       const previousCard = options.previousCard ?? state.lastPlayedCard;
 
+      if (state.copiesThisTurn >= state.maxCopiesPerTurn) {
+        events.push(
+          state.createEvent({
+            type: 'LIMIT_DOWN',
+            sourceId: card.id,
+            sourceName: card.name,
+            message: `${card.name} 的复制次数已达本回合上限。`
+          })
+        );
+        continue;
+      }
+
       events.push(
         state.createEvent({
           type: 'CARD_COPIED',
@@ -391,6 +405,10 @@ export function createCardEffectEvents(
 
     if (effect.type === 'DRAW_CARD') {
       events.push(...createDrawEvents(state, card.id, card.name, effect.value));
+    }
+
+    if (effect.type === 'GAIN_AP') {
+      events.push(...createApGainEvents(state, card.id, card.name, effect.value));
     }
 
     if (effect.type === 'CASH_OUT') {
@@ -495,7 +513,20 @@ export function resolveGameEvent(
   const nextEvents: GameEvent[] = [];
 
   if (resolvedEvent.type === 'CARD_DRAWN') {
+    state.bonusDrawsThisTurn += resolvedEvent.value ?? 1;
     drawCardsIntoHand(state, resolvedEvent.value ?? 1);
+  }
+
+  if (resolvedEvent.type === 'CARD_COPIED') {
+    state.copiesThisTurn += 1;
+  }
+
+  if (resolvedEvent.type === 'AP_GAINED') {
+    state.bonusApGainsThisTurn += 1;
+    state.actionPoints = roundToTwoDecimals(
+      state.actionPoints + (resolvedEvent.value ?? 0)
+    );
+    state.ap = state.actionPoints;
   }
 
   if (shouldTriggerQuantPassive(state, resolvedEvent)) {
@@ -733,6 +764,10 @@ function resolveToolTriggers(state: EventGameState, event: GameEvent): GameEvent
         events.push(...createDrawEvents(state, tool.id, tool.name, effect.value));
       }
 
+      if (effect.type === 'GAIN_AP') {
+        events.push(...createApGainEvents(state, tool.id, tool.name, effect.value));
+      }
+
       if (effect.type === 'LOCK_FLOATING_PROFIT') {
         const lockAmount = roundToTwoDecimals(
           state.combo.currentChainProfit * effect.ratio
@@ -887,15 +922,61 @@ function createDrawEvents(
   sourceName: string,
   count: number
 ) {
-  return Array.from({ length: count }, () =>
+  const remainingDraws = Math.max(
+    0,
+    state.maxBonusDrawsPerTurn - state.bonusDrawsThisTurn
+  );
+  const allowedCount = Math.min(count, remainingDraws);
+  const events = Array.from({ length: allowedCount }, () =>
     state.createEvent({
       type: 'CARD_DRAWN',
       sourceId,
       sourceName,
-      message: `${sourceName} 抽 1 张测试牌。`,
+      message: `${sourceName} 抽 1 张牌。`,
       value: 1
     })
   );
+
+  if (allowedCount < count) {
+    events.push(
+      state.createEvent({
+        type: 'LIMIT_DOWN',
+        sourceId,
+        sourceName,
+        message: `${sourceName} 的额外抽牌已达本回合上限。`
+      })
+    );
+  }
+
+  return events;
+}
+
+function createApGainEvents(
+  state: EventGameState,
+  sourceId: string,
+  sourceName: string,
+  value: number
+) {
+  if (state.bonusApGainsThisTurn >= state.maxBonusApGainsPerTurn) {
+    return [
+      state.createEvent({
+        type: 'LIMIT_DOWN',
+        sourceId,
+        sourceName,
+        message: `${sourceName} 的额外 AP 已达本回合上限。`
+      })
+    ];
+  }
+
+  return [
+    state.createEvent({
+      type: 'AP_GAINED',
+      sourceId,
+      sourceName,
+      message: `${sourceName} 返还 ${value} AP。`,
+      value
+    })
+  ];
 }
 
 function drawCardsIntoHand(state: EventGameState, count: number) {

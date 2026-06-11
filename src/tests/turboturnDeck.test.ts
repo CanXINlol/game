@@ -61,7 +61,10 @@ describe('continuous deck and Turboturn rules', () => {
   });
 
   it('increases turboturnStep when costs rise by one', () => {
-    const state = createFormalSequenceState(['formal-tech-002', 'formal-tech-001']);
+    const state = createFormalSequenceState(
+      ['formal-tech-002', 'formal-tech-001'],
+      [0, 1]
+    );
 
     const firstState = playCard(state, 'formal-tech-002');
     const secondState = playCard(firstState, 'formal-tech-001');
@@ -72,12 +75,15 @@ describe('continuous deck and Turboturn rules', () => {
   });
 
   it('completes Turboturn on a 0 to 1 to 2 to 3 sequence', () => {
-    const state = createFormalSequenceState([
-      'formal-tech-002',
-      'formal-tech-001',
-      'formal-tech-003',
-      'formal-finance-006'
-    ]);
+    const state = createFormalSequenceState(
+      [
+        'formal-tech-002',
+        'formal-tech-001',
+        'formal-tech-003',
+        'formal-finance-006'
+      ],
+      [0, 1, 2, 3]
+    );
 
     const firstState = playCard(state, 'formal-tech-002');
     const secondState = playCard(firstState, 'formal-tech-001');
@@ -91,7 +97,10 @@ describe('continuous deck and Turboturn rules', () => {
   });
 
   it('resets turboturnStep when the cost sequence breaks', () => {
-    const state = createFormalSequenceState(['formal-tech-002', 'formal-tech-003']);
+    const state = createFormalSequenceState(
+      ['formal-tech-002', 'formal-tech-003'],
+      [0, 2]
+    );
 
     const firstState = playCard(state, 'formal-tech-002');
     const secondState = playCard(firstState, 'formal-tech-003');
@@ -102,8 +111,8 @@ describe('continuous deck and Turboturn rules', () => {
   });
 
   it('applies Turboturn to profit and combo payoff', () => {
-    const state = createFormalSequenceState(['formal-tech-002']);
-    const card = getFormalCard('formal-tech-002');
+    const state = createFormalSequenceState(['formal-tech-002'], [0]);
+    const card = state.hand[0];
 
     const nextState = playCard(state, card.id);
 
@@ -112,15 +121,23 @@ describe('continuous deck and Turboturn rules', () => {
   });
 });
 
-function createFormalSequenceState(cardIds: string[]) {
-  const hand = cardIds.map(getFormalCard);
+function createFormalSequenceState(cardIds: string[], costs: EventCard['cost'][]) {
+  const hand = cardIds.map((cardId, index) => ({
+    ...getFormalCard(cardId),
+    cost: costs[index]
+  }));
 
   return createFormalEventGameState({
     hand,
     drawPile: [],
     discardPile: [],
     playedCardsThisTurn: [],
-    tools: []
+    tools: [],
+    ap: 6,
+    maxAp: 6,
+    actionPoints: 6,
+    maxActionPoints: 6,
+    baseMaxAp: 6
   });
 }
 

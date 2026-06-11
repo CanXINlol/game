@@ -101,6 +101,20 @@ export default function App() {
     currentRouteNode?.type === 'BOSS'
       ? `第 ${eventState.routeMap.currentAct} 幕首领`
       : null;
+  const endTurnPreview =
+    gameStatus === 'PLAYER_TURN' ? getEndTurnPreview(eventState) : '';
+  const handleEndTurn = () => {
+    if (gameStatus === 'PLAYER_TURN') {
+      const confirmed =
+        typeof window === 'undefined' ? true : window.confirm(endTurnPreview);
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    endTurn();
+  };
 
   return (
     <main className="app-shell game-screen">
@@ -221,7 +235,7 @@ export default function App() {
                   <button
                     className="primary-action end-turn-action"
                     type="button"
-                    onClick={endTurn}
+                    onClick={handleEndTurn}
                     disabled={
                       gameStatus === 'ENEMY_INTENT' && !eventState.canResolveIntent
                     }
@@ -233,7 +247,7 @@ export default function App() {
                         : '本回合意图已结算'}
                   </button>
                   {gameStatus === 'PLAYER_TURN' ? (
-                    <p className="turn-preview">{getEndTurnPreview(eventState)}</p>
+                    <p className="turn-preview">{endTurnPreview}</p>
                   ) : null}
                 </>
               }

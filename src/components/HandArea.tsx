@@ -48,9 +48,9 @@ export function HandArea(props: {
               <small>评级 {card.rank}</small>
               <p>{getCardLine(card, 0)}</p>
               <p className="card-hint">{getCardLine(card, 1)}</p>
-              <em className={disabledReason ? 'play-reason blocked' : 'play-reason'}>
-                {disabledReason ?? '可点击'}
-              </em>
+              {disabledReason ? (
+                <em className="play-reason blocked">{disabledReason}</em>
+              ) : null}
             </button>
           );
         })}

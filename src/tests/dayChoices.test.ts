@@ -28,8 +28,8 @@ describe('day-end greed choices', () => {
       'leverage',
       'continueTrading'
     ]);
-    expect(previews[0].profitText).toContain('70%');
-    expect(previews[2].riskText).toContain('maxRisk');
+    expect(previews[0].profitText).toContain('锁定');
+    expect(previews[2].riskText).toContain('爆仓线');
   });
 
   it('cash out locks 70% floatingProfit and records history', () => {
@@ -68,8 +68,8 @@ describe('day-end greed choices', () => {
 
     expect(state.risk).toBe(25);
     expect(state.profitMultiplier).toBe(1.6);
-    expect(state.maxAp).toBe(7);
-    expect(state.ap).toBe(7);
+    expect(state.maxAp).toBe(4);
+    expect(state.ap).toBe(4);
     expect(state.maxRisk).toBe(90);
     expect(state.lastDayChoice).toBe('leverage');
   });
@@ -85,17 +85,19 @@ describe('day-end greed choices', () => {
     expect(afterPlay.combo.eventLog.join('\n')).toContain('x1.60');
   });
 
-  it('continue trading creates a new MarketPressure and keeps floatingProfit and risk', () => {
+  it('continue trading creates a new MarketPressure and raises risk plus reward multiplier', () => {
     const state = createDayEndState();
     state.risk = 35;
     const floatingBefore = state.combo.currentChainProfit;
     const pressureIdBefore = state.marketPressure.id;
+    const multiplierBefore = state.profitMultiplier;
 
     applyDayChoice(state, 'continueTrading');
 
     expect(state.phase).toBe('PLAYER_TURN');
     expect(state.day).toBe(1);
-    expect(state.risk).toBe(35);
+    expect(state.risk).toBe(50);
+    expect(state.profitMultiplier).toBeGreaterThan(multiplierBefore);
     expect(state.combo.currentChainProfit).toBe(floatingBefore);
     expect(state.marketPressure.id).not.toBe(pressureIdBefore);
     expect(state.rewardRarityBonus).toBe(1);

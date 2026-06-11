@@ -9,6 +9,11 @@ export function DayChoicePanel(props: {
   previews: DayChoicePreview[];
   onChoose: (choice: DayChoiceId) => void;
 }) {
+  const possibleLoss = Math.max(
+    props.floatingProfit,
+    ...props.previews.map((preview) => preview.possibleLoss)
+  );
+
   return (
     <section className="panel day-choice-panel">
       <div className="section-heading">
@@ -21,7 +26,8 @@ export function DayChoicePanel(props: {
         </span>
       </div>
       <p className="loss-warning">
-        当前浮盈 {props.floatingProfit.toFixed(1)}。选择前请确认：未锁定浮盈会继续承担下一轮风险。
+        当前浮盈 {props.floatingProfit.toFixed(1)}。当前可能损失浮盈{' '}
+        {possibleLoss.toFixed(1)}。选择前请确认：未锁定浮盈会继续承担下一轮风险。
       </p>
       <div className="choice-grid day-choice-grid">
         {props.previews.map((preview) => (
@@ -38,6 +44,7 @@ export function DayChoicePanel(props: {
             <span>{localizeText(preview.profitText)}</span>
             <span>{localizeText(preview.riskText)}</span>
             <span>{localizeText(preview.nextDayText)}</span>
+            <span>{localizeText(preview.lossText)}</span>
             <em>{localizeText(preview.warningText)}</em>
           </button>
         ))}

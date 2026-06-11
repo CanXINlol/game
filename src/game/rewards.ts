@@ -124,6 +124,9 @@ export function startNextMarketPressure(state: EventGameState): EventGameState {
   state.lastPlayedCost = null;
   state.turboturnStep = 0;
   state.turboturnMultiplier = 1;
+  state.bonusApGainsThisTurn = 0;
+  state.bonusDrawsThisTurn = 0;
+  state.copiesThisTurn = 0;
   state.intentProfitMultiplier = 1;
   state.intentRiskMultiplier = 1;
   state.weakenedSector = null;

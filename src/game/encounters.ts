@@ -127,14 +127,32 @@ export function endEncounterTurn(state: EventGameState): EventGameState {
 export function getEndTurnPreview(state: EventGameState) {
   const intent = state.marketPressure.intent;
   const handDiscardCount = state.hand.filter((card) => !card.retain).length;
+  const playedDiscardCount = state.playedCardsThisTurn.filter(
+    (card) => !card.exhaust
+  ).length;
+  const totalDiscardCount = handDiscardCount + playedDiscardCount;
+  const retainedCount = state.hand.length - handDiscardCount;
+  const nextDrawCount = Math.max(0, EVENT_HAND_SIZE - retainedCount);
   const riskDelta = intent.type === 'RISK_ATTACK' ? intent.value ?? 0 : 0;
-  const willDanger = state.risk + riskDelta >= state.maxRisk;
+  const projectedRisk = roundToTwoDecimals(state.risk + riskDelta);
+  const willDanger = projectedRisk >= state.maxRisk * 0.75;
+  const willBankrupt = projectedRisk >= state.maxRisk;
   const noiseText =
     intent.type === 'SUMMON_NOISE'
       ? `，并加入 ${intent.value ?? 1} 张市场噪音`
       : '';
 
-  return `结束回合：${intent.label}将${riskDelta > 0 ? `使风险 +${riskDelta}` : '结算当前效果'}${noiseText}。${willDanger ? '将触发危险阈值。' : ''}当前 ${handDiscardCount} 张手牌将弃置。`;
+  return [
+    `敌方意图：${intent.label}。`,
+    `预计 Risk 变化：${riskDelta > 0 ? `+${riskDelta}` : '0'}${noiseText}。`,
+    `将弃置 ${totalDiscardCount} 张牌（手牌 ${handDiscardCount}，已打出 ${playedDiscardCount}）。`,
+    `下回合抽 ${nextDrawCount} 张。`,
+    willBankrupt
+      ? '警告：结算后会触发爆仓。'
+      : willDanger
+        ? '警告：结算后会进入危险 Risk 区间。'
+        : 'Risk 暂未进入危险区间。'
+  ].join(' ');
 }
 
 export function settleEncounterTurn(state: EventGameState): EventGameState {
@@ -182,6 +200,9 @@ export function settleEncounterTurn(state: EventGameState): EventGameState {
   state.cardsDrawnThisTurn = preparedState.cardsDrawnThisTurn;
   state.actionPoints = state.maxActionPoints;
   state.ap = state.actionPoints;
+  state.bonusApGainsThisTurn = 0;
+  state.bonusDrawsThisTurn = 0;
+  state.copiesThisTurn = 0;
   state.lastPlayedCard = null;
   state.lastPlayedCost = null;
   state.turboturnStep = 0;

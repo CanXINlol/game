@@ -17,6 +17,7 @@ export type GameEventType =
   | 'LEVERAGE_ADDED'
   | 'CARD_COPIED'
   | 'CARD_DRAWN'
+  | 'AP_GAINED'
   | 'CASH_OUT'
   | 'LOSS_TAKEN'
   | 'TRADE_ENDED'

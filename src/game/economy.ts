@@ -123,6 +123,7 @@ export function removeCardFromRun(state: EventGameState, cardId: string) {
   state.playedCardsThisTurn = state.playedCardsThisTurn.filter(
     (item) => item.id !== cardId
   );
+  state.removedCards.push(card);
 
   return { success: true, message: `删除牌：${card.name}。` };
 }
